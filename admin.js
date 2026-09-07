@@ -5,7 +5,7 @@ const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebas
 const ADMIN_PASSWORD = "GBRMu5281";
 const SUPABASE_URL = "https://twkgioiyfjfkppzerdii.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_UxPFx1rFmy8g8CMaaqtQ1g_LuHnfvry";
-const SUPABASE_BUCKET = "GBR-ASSETS";
+const SUPABASE_BUCKET = "gbr-assets";
 const SUPABASE_PUBLIC_ROOT = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}`;
 const GROQ_API_KEY = "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";
 // Preferred models in order of preference. The app will auto-discover
@@ -706,7 +706,14 @@ async function uploadSupabaseAsset(file, path) {
     },
     body: file,
   });
-  if (!response.ok) throw new Error(`Supabase upload failed (${response.status})`);
+  if (!response.ok) {
+    let message = `Supabase upload failed (${response.status})`;
+    try {
+      const error = await response.json();
+      if (error.message) message += `: ${error.message}`;
+    } catch (_) {}
+    throw new Error(message);
+  }
   return publicAssetUrl(path);
 }
 
