@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GBR Museum — Live Guestbook</title>
+<link rel="stylesheet" href="guestbook.css" />
+<script src="asset-manifest.js"></script>
+<script src="offline-store.js"></script>
+<base target="_blank">
+</head>
+<body>
+
+  <div class="tv-frame">
+    <!-- Header Bar -->
+    <header class="tv-header">
+      <div class="tv-brand">
+        <span class="tv-logo">🏛️</span>
+        <div>
+          <h1>GBR Museum</h1>
+          <p class="tv-subtitle">Live Guestbook & Leaderboard</p>
+        </div>
+      </div>
+      <div class="tv-meta">
+        <div class="tv-stat">
+          <span id="stat-notes-count">—</span>
+          <label>Notes</label>
+        </div>
+        <div class="tv-stat">
+          <span id="stat-leaderboard-count">—</span>
+          <label>Completions</label>
+        </div>
+        <div class="tv-clock" id="tv-clock">--:--</div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="tv-layout">
+      <!-- LEFT: Guestbook Board -->
+      <div class="tv-board-section">
+        <div class="tv-section-label">
+          <span>📝 Guestbook Board</span>
+          <span class="tv-refresh-hint" id="refresh-hint">Refreshing in 30s</span>
+        </div>
+        <div id="notes-board-wrap" class="tv-board-wrap">
+          <div id="notes-board" class="tv-board"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Leaderboard -->
+      <div class="tv-sidebar">
+        <div class="tv-section-label">🏆 Fastest Completions</div>
+        <div id="leaderboard-list" class="tv-leaderboard"></div>
+      </div>
+    </div>
+
+    <!-- Footer Ticker -->
+    <div class="tv-ticker">
+      <div class="ticker-content" id="ticker-text">
+        Welcome to the GBR Jr. Museum! Scan artworks with your phone to unlock their stories. Complete all quizzes to leave a note on the guestbook board!
+      </div>
+    </div>
+  </div>
+
+  <!-- Note View Modal -->
+  <div id="note-view-modal" class="modal-overlay hidden">
+    <div class="modal-card tv-modal-card">
+      <div id="note-view-content" class="note-view-content"></div>
+      <p id="note-view-name" class="modal-desc">—</p>
+      <button id="btn-note-view-close" class="btn-primary">Close</button>
+    </div>
+  </div>
+
+  <script src="guestbook.js"></script>
+</body>
+</html>

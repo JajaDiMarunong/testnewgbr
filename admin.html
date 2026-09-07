@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Museum AR — Admin Panel</title>
+<link rel="stylesheet" href="admin.css" />
+<script src="asset-manifest.js"></script>
+<script src="offline-store.js"></script>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
+<base target="_blank">
+</head>
+<body>
+
+  <!-- LOGIN SCREEN -->
+  <div id="screen-login" class="modal-overlay">
+    <div class="modal-card">
+      <p class="modal-eyebrow">Restricted</p>
+      <h2>Admin Login</h2>
+      <p class="modal-desc">Manage artworks, leaderboard, and guestbook.</p>
+      <input id="admin-password-input" class="text-input" type="password" placeholder="Admin password" />
+      <p id="admin-login-error" class="admin-error hidden">Incorrect password.</p>
+      <button id="btn-admin-login-submit" class="btn-primary">Log In</button>
+    </div>
+  </div>
+
+  <!-- AI ASSISTANT POPUP MODAL -->
+  <div id="ai-modal" class="modal-overlay hidden">
+    <div class="modal-card ai-modal-card">
+      <p class="modal-eyebrow">AI Assistant</p>
+      <h2>Auto-Fill Artwork Info</h2>
+      <p class="modal-desc">Paste any description, title, or notes about the artwork below. The AI will extract the title, artist, year, location, and write a description for you.</p>
+      <textarea id="ai-paste-input" class="note-textarea" rows="6" placeholder="Paste artwork info here… e.g. The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence, just before sunrise, with the addition of an imaginary village. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."></textarea>
+      <p id="ai-modal-status" class="ai-status"></p>
+      <div class="modal-actions">
+        <button id="btn-ai-cancel" class="btn-secondary">Cancel</button>
+        <button id="btn-ai-submit" class="btn-primary" style="margin-top:0;">✨ Auto-Fill Fields</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN ADMIN DASHBOARD -->
+  <div id="admin-dashboard" class="hidden">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">GBR Jr. Museum</p>
+        <h1>Admin Panel</h1>
+      </div>
+      <button id="btn-logout" class="btn-secondary btn-small">Log Out</button>
+    </header>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="stats">Stats</button>
+      <button class="tab-btn" data-tab="artworks">Artworks</button>
+      <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+      <button class="tab-btn" data-tab="notes">Guestbook</button>
+    </div>
+
+    <!-- STATS TAB -->
+    <section id="tab-stats" class="tab-panel">
+      <div class="active-now-banner">
+        <span class="active-now-dot"></span>
+        <span id="stat-active-now" class="active-now-value">—</span>
+        <span class="active-now-label">people on the site</span>
+      </div>
+
+      <div class="admin-section-header" style="margin-top:22px;">
+        <p class="eyebrow" style="margin:0;">Site Visits</p>
+        <div class="visits-filter" id="visits-filter">
+          <button class="filter-tab active" data-range="week">This Week</button>
+          <button class="filter-tab" data-range="lastweek">Last Week</button>
+          <button class="filter-tab" data-range="month">This Month</button>
+          <button class="filter-tab" data-range="all">All Time</button>
+        </div>
+      </div>
+      <div id="visits-chart" class="visits-chart"></div>
+      <p id="visits-chart-total" class="visits-chart-total">—</p>
+
+      <p class="eyebrow" style="margin-top:26px;">Collection Summary</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span id="stat-artwork-count" class="stat-value">—</span>
+          <span class="stat-label">Artworks</span>
+        </div>
+        <div class="stat-card">
+          <span id="stat-leaderboard-count" class="stat-value">—</span>
+          <span class="stat-label">Leaderboard Entries</span>
+        </div>
+        <div class="stat-card">
+          <span id="stat-notes-count" class="stat-value">—</span>
+          <span class="stat-label">Guestbook Notes</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARTWORKS TAB -->
+    <section id="tab-artworks" class="tab-panel hidden">
+      <div class="artworks-layout">
+        <!-- Upload Form -->
+        <div class="upload-panel">
+          <p class="eyebrow">Add New</p>
+          <h3>Upload Artwork</h3>
+          <p class="modal-desc">-</p>
+
+          <button id="btn-open-ai-modal" class="btn-secondary btn-small" style="width:100%; margin-bottom:14px;">AI Assistant — Auto-Fill Info</button>
+
+          <div class="form-group">
+            <label>Artwork Photo <span class="required">*</span></label>
+            <div class="image-upload-zone" id="image-upload-zone">
+              <input type="file" id="artwork-image" accept="image/*" hidden />
+              <img id="image-preview" class="hidden" alt="Preview" />
+              <div id="upload-placeholder" class="upload-placeholder">
+                <span class="upload-icon">📷</span>
+                <span>Tap to select image</span>
+                <span class="upload-hint">JPG or PNG, max 5MB</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>AR Marker Image</label>
+            <div class="file-input-row">
+              <input type="file" id="artwork-marker" accept="image/*" />
+              <span class="upload-hint">Use the artwork as it appears on display</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>3D Model (.glb)</label>
+            <input type="file" id="artwork-model" accept=".glb,model/gltf-binary" />
+          </div>
+
+          <div class="form-group">
+            <label>Immersive Skybox (.glb)</label>
+            <input type="file" id="artwork-skybox" accept=".glb,model/gltf-binary" />
+          </div>
+
+          <div class="form-group">
+            <label>Title <span class="required">*</span></label>
+            <input id="artwork-name" class="text-input" type="text" placeholder="e.g. Starry Night" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Artist</label>
+              <input id="artwork-artist" class="text-input" type="text" placeholder="e.g. Vincent van Gogh" />
+            </div>
+            <div class="form-group">
+              <label>Year</label>
+              <input id="artwork-year" class="text-input" type="text" placeholder="e.g. 1889" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Location</label>
+            <input id="artwork-location" class="text-input" type="text" placeholder="e.g. MoMA, New York" />
+          </div>
+
+          <div class="form-group">
+            <label>Description <span class="required">*</span></label>
+            <textarea id="artwork-details" class="note-textarea" rows="4" placeholder="Full description of the artwork…"></textarea>
+          </div>
+
+          <div class="artwork-options">
+            <label class="checkbox-label"><input id="artwork-main" type="checkbox" checked /> Show in Main Collection</label>
+            <label class="checkbox-label"><input id="artwork-scannable" type="checkbox" checked /> Scannable with AR</label>
+            <label class="checkbox-label"><input id="artwork-published" type="checkbox" checked /> Published</label>
+          </div>
+
+          <button id="btn-upload-artwork" class="btn-primary">Upload Artwork</button>
+          <p id="upload-status" class="upload-status"></p>
+        </div>
+
+        <!-- Existing Artworks List -->
+        <div class="artworks-list-panel">
+          <div class="admin-section-header">
+            <p class="eyebrow" style="margin:0;">Existing Artworks</p>
+            <span id="artworks-count-label" class="upload-status"></span>
+          </div>
+          <div id="admin-artworks-list" class="admin-artworks-list"></div>
+          <div class="ar-publish-panel">
+            <p class="eyebrow" style="margin:0 0 6px;">AR Collection</p>
+            <p class="modal-desc">Build a new target file after adding or changing scannable artworks. Visitors keep using the last complete bundle until this finishes.</p>
+            <button id="btn-build-ar" class="btn-primary">Build and Publish AR Collection</button>
+            <p id="ar-build-status" class="upload-status"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD TAB -->
+    <section id="tab-leaderboard" class="tab-panel hidden">
+      <div class="admin-section-header">
+        <p class="eyebrow" style="margin:0;">Leaderboard Entries</p>
+        <div class="admin-section-actions">
+          <button id="btn-export-leaderboard" class="btn-tiny">Export JSON</button>
+          <button id="btn-clear-leaderboard" class="btn-tiny danger">Clear All</button>
+        </div>
+      </div>
+
+      <!-- Date Filter -->
+      <div class="date-filter-bar">
+        <span class="date-filter-label">Filter by date:</span>
+        <select id="lb-date-filter" class="date-select">
+          <option value="all">All Time</option>
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="week">This Week</option>
+          <option value="lastweek">Last Week</option>
+          <option value="month">This Month</option>
+          <option value="lastmonth">Last Month</option>
+          <option value="custom">Custom Range…</option>
+        </select>
+        <div id="lb-custom-range" class="custom-range hidden">
+          <input type="date" id="lb-date-from" class="date-input" />
+          <span>to</span>
+          <input type="date" id="lb-date-to" class="date-input" />
+          <button id="lb-apply-custom" class="btn-tiny">Apply</button>
+        </div>
+        <span id="lb-filter-count" class="filter-count"></span>
+      </div>
+
+      <div id="admin-leaderboard-list" class="admin-list"></div>
+    </section>
+
+    <!-- NOTES TAB -->
+    <section id="tab-notes" class="tab-panel hidden">
+      <div class="admin-section-header">
+        <p class="eyebrow" style="margin:0;">Guestbook Notes</p>
+        <div class="admin-section-actions">
+          <button id="btn-export-notes" class="btn-tiny">Export JSON</button>
+          <button id="btn-clear-notes" class="btn-tiny danger">Clear All</button>
+        </div>
+      </div>
+
+      <!-- Date Filter -->
+      <div class="date-filter-bar">
+        <span class="date-filter-label">Filter by date:</span>
+        <select id="notes-date-filter" class="date-select">
+          <option value="all">All Time</option>
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="week">This Week</option>
+          <option value="lastweek">Last Week</option>
+          <option value="month">This Month</option>
+          <option value="lastmonth">Last Month</option>
+          <option value="custom">Custom Range…</option>
+        </select>
+        <div id="notes-custom-range" class="custom-range hidden">
+          <input type="date" id="notes-date-from" class="date-input" />
+          <span>to</span>
+          <input type="date" id="notes-date-to" class="date-input" />
+          <button id="notes-apply-custom" class="btn-tiny">Apply</button>
+        </div>
+        <span id="notes-filter-count" class="filter-count"></span>
+      </div>
+
+      <div id="admin-notes-list" class="admin-list"></div>
+    </section>
+
+    <button id="btn-refresh-admin" class="btn-secondary refresh-btn">↻ Refresh Data</button>
+  </div>
+
+  <script src="admin.js" defer></script>
+</body>
+</html>
