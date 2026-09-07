@@ -136,6 +136,19 @@
             <input type="file" id="artwork-skybox" accept=".glb,model/gltf-binary" />
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label>AR Model Scale</label>
+              <input id="artwork-model-scale" class="text-input" type="number" min="0.001" max="10" step="0.001" value="0.5" />
+              <span class="upload-hint">Crisanto uses 0.5</span>
+            </div>
+            <div class="form-group">
+              <label>Forward Position (Z)</label>
+              <input id="artwork-model-forward" class="text-input" type="number" min="-5" max="5" step="0.01" value="0.1" />
+              <span class="upload-hint">Crisanto uses 0.1</span>
+            </div>
+          </div>
+
           <div class="form-group">
             <label>Title <span class="required">*</span></label>
             <input id="artwork-name" class="text-input" type="text" placeholder="e.g. Starry Night" />
@@ -169,6 +182,7 @@
           </div>
 
           <button id="btn-upload-artwork" class="btn-primary">Upload Artwork</button>
+          <button id="btn-cancel-artwork-edit" class="btn-secondary hidden" type="button">Cancel Edit</button>
           <p id="upload-status" class="upload-status"></p>
         </div>
 

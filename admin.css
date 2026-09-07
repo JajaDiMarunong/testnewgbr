@@ -281,6 +281,7 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; l
   color: var(--frame-gold);
 }
 .artwork-row-info .artwork-source.builtin { background: rgba(244,241,234,0.1); color: var(--text-dim); }
+.artwork-row-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 
 /* ---------------- Date Filter Bar ---------------- */
 .date-filter-bar {

@@ -1649,7 +1649,7 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
     modelEl.setAttribute("material", "side: double");
   }
 
-  modelEl.setAttribute("position", "0 0 0.1");
+  modelEl.setAttribute("position", `0 0 ${art.modelPositionZ ?? 0.1}`);
   modelEl.setAttribute("rotation", art.markerRotation || "0 0 0");
   modelEl.setAttribute("scale", `${art.baseScale} ${art.baseScale} ${art.baseScale}`);
   modelEl.addEventListener("model-error", (e) =>
@@ -1820,7 +1820,8 @@ async function initArtworks() {
           modelObj: val.modelUrl || null,
           modelMtl: null,
           immersiveSkybox: val.immersiveSkyboxUrl || null,
-          baseScale: val.baseScale || 0.06,
+          baseScale: val.baseScale == null ? 0.5 : Number(val.baseScale),
+          modelPositionZ: val.modelPositionZ == null ? 0.1 : Number(val.modelPositionZ),
           icon: val.icon || "🖼️",
           unlocked: false,
           quizCompleted: false,

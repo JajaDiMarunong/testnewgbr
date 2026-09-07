@@ -146,9 +146,12 @@ const uploadStatus = document.getElementById("upload-status");
 const artworkMarkerInput = document.getElementById("artwork-marker");
 const artworkModelInput = document.getElementById("artwork-model");
 const artworkSkyboxInput = document.getElementById("artwork-skybox");
+const artworkModelScaleInput = document.getElementById("artwork-model-scale");
+const artworkModelForwardInput = document.getElementById("artwork-model-forward");
 const artworkMainInput = document.getElementById("artwork-main");
 const artworkScannableInput = document.getElementById("artwork-scannable");
 const artworkPublishedInput = document.getElementById("artwork-published");
+const btnCancelArtworkEdit = document.getElementById("btn-cancel-artwork-edit");
 const btnBuildAr = document.getElementById("btn-build-ar");
 const arBuildStatus = document.getElementById("ar-build-status");
 
@@ -670,6 +673,59 @@ notesApplyCustom.addEventListener("click", renderNotesList);
 // ARTWORKS
 // =====================================================================
 let uploadedArtworksCache = [];
+let editingArtworkId = null;
+
+function numberOrDefault(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function resetArtworkForm() {
+  editingArtworkId = null;
+  document.getElementById("artwork-name").value = "";
+  document.getElementById("artwork-artist").value = "";
+  document.getElementById("artwork-year").value = "";
+  document.getElementById("artwork-location").value = "";
+  document.getElementById("artwork-details").value = "";
+  artworkImageInput.value = "";
+  artworkMarkerInput.value = "";
+  artworkModelInput.value = "";
+  artworkSkyboxInput.value = "";
+  artworkModelScaleInput.value = "0.5";
+  artworkModelForwardInput.value = "0.1";
+  artworkMainInput.checked = true;
+  artworkScannableInput.checked = true;
+  artworkPublishedInput.checked = true;
+  processedImageBase64 = null;
+  imagePreview.classList.add("hidden");
+  uploadPlaceholder.classList.remove("hidden");
+  btnUploadArtwork.textContent = "Upload Artwork";
+  btnCancelArtworkEdit.classList.add("hidden");
+}
+
+function startArtworkSettingsEdit(art) {
+  editingArtworkId = art.id;
+  document.getElementById("artwork-name").value = art.name || "";
+  document.getElementById("artwork-artist").value = art.artist || "";
+  document.getElementById("artwork-year").value = art.year || "";
+  document.getElementById("artwork-location").value = art.location || "";
+  document.getElementById("artwork-details").value = art.details || "";
+  artworkModelScaleInput.value = numberOrDefault(art.baseScale, 0.5);
+  artworkModelForwardInput.value = numberOrDefault(art.modelPositionZ, 0.1);
+  artworkMainInput.checked = art.showInMainCollection !== false;
+  artworkScannableInput.checked = art.scannable !== false;
+  artworkPublishedInput.checked = art.published !== false;
+  if (art.imageUrl || art.image) {
+    imagePreview.src = art.imageUrl || art.image;
+    imagePreview.classList.remove("hidden");
+    uploadPlaceholder.classList.add("hidden");
+  }
+  btnUploadArtwork.textContent = "Save Artwork Settings";
+  btnCancelArtworkEdit.classList.remove("hidden");
+  uploadStatus.textContent = `Editing ${art.name}. Change the AR model scale or forward position, then save.`;
+  uploadStatus.className = "upload-status";
+  document.getElementById("artwork-model-scale").scrollIntoView({ behavior: "smooth", block: "center" });
+}
 
 function storagePath(...parts) {
   return parts.flatMap((part) => part.split("/")).map((part) => encodeURIComponent(part)).join("/");
@@ -733,12 +789,18 @@ async function loadAdminArtworks() {
           <p class="artwork-meta">${escapeHtml(meta)}</p>
           <span class="artwork-source ${isBuiltin ? "builtin" : ""}">${isBuiltin ? "Built-in" : "Uploaded"} · ${art.published === false ? "Draft" : "Published"}</span>
         </div>
-        ${isBuiltin ? "" : `<button class="admin-delete-btn" data-path="artworks/${art.id}" data-label="this artwork">Delete</button>`}
+        ${isBuiltin ? "" : `<div class="artwork-row-actions"><button class="btn-tiny artwork-edit-btn" data-artwork-id="${art.id}">Edit Settings</button><button class="admin-delete-btn" data-path="artworks/${art.id}" data-label="this artwork">Delete</button></div>`}
       </div>`;
       })
       .join("");
 
     attachDeleteHandlers();
+    adminArtworksList.querySelectorAll(".artwork-edit-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const artwork = uploadedArtworksCache.find((item) => item.key === button.dataset.artworkId);
+        if (artwork) startArtworkSettingsEdit({ ...artwork, id: artwork.key });
+      });
+    });
   } catch (err) {
     adminArtworksList.innerHTML = `<p class="leaderboard-status">Couldn't load artworks.</p>`;
   }
@@ -796,6 +858,39 @@ function downscaleImage(img, maxDim) {
 }
 
 btnUploadArtwork.addEventListener("click", async () => {
+  if (editingArtworkId) {
+    const baseScale = numberOrDefault(artworkModelScaleInput.value, NaN);
+    const modelPositionZ = numberOrDefault(artworkModelForwardInput.value, NaN);
+    if (!Number.isFinite(baseScale) || baseScale <= 0 || !Number.isFinite(modelPositionZ)) {
+      uploadStatus.textContent = "Enter a valid positive model scale and a valid forward position.";
+      uploadStatus.className = "upload-status error";
+      return;
+    }
+
+    btnUploadArtwork.disabled = true;
+    uploadStatus.textContent = "Saving artwork settings…";
+    uploadStatus.className = "upload-status";
+    try {
+      const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseScale, modelPositionZ }),
+      });
+      if (!response.ok) throw new Error(`Firebase artwork settings save failed (${response.status})`);
+      uploadStatus.textContent = "Artwork settings saved successfully!";
+      uploadStatus.className = "upload-status success";
+      resetArtworkForm();
+      loadAdminArtworks();
+    } catch (err) {
+      console.error("Artwork settings save failed:", err);
+      uploadStatus.textContent = err?.message || "Could not save artwork settings.";
+      uploadStatus.className = "upload-status error";
+    } finally {
+      btnUploadArtwork.disabled = false;
+    }
+    return;
+  }
+
   const name = document.getElementById("artwork-name").value.trim();
   const details = document.getElementById("artwork-details").value.trim();
 
@@ -841,7 +936,8 @@ btnUploadArtwork.addEventListener("click", async () => {
       year: document.getElementById("artwork-year").value.trim() || null,
       location: document.getElementById("artwork-location").value.trim() || null,
       details,
-      baseScale: 0.06,
+      baseScale: numberOrDefault(artworkModelScaleInput.value, 0.5),
+      modelPositionZ: numberOrDefault(artworkModelForwardInput.value, 0.1),
       icon: "🖼️",
       showInMainCollection: artworkMainInput.checked,
       scannable: artworkScannableInput.checked,
@@ -860,18 +956,7 @@ btnUploadArtwork.addEventListener("click", async () => {
     uploadStatus.className = "upload-status success";
 
     // Reset form
-    document.getElementById("artwork-name").value = "";
-    document.getElementById("artwork-artist").value = "";
-    document.getElementById("artwork-year").value = "";
-    document.getElementById("artwork-location").value = "";
-    document.getElementById("artwork-details").value = "";
-    processedImageBase64 = null;
-    imagePreview.classList.add("hidden");
-    uploadPlaceholder.classList.remove("hidden");
-    artworkImageInput.value = "";
-    artworkMarkerInput.value = "";
-    artworkModelInput.value = "";
-    artworkSkyboxInput.value = "";
+    resetArtworkForm();
 
     loadAdminArtworks();
     loadCounts();
@@ -883,6 +968,8 @@ btnUploadArtwork.addEventListener("click", async () => {
     btnUploadArtwork.disabled = false;
   }
 });
+
+btnCancelArtworkEdit.addEventListener("click", resetArtworkForm);
 
 // ---- AR target compiler and versioned publisher ----
 async function fetchUploadedArtworks() {
