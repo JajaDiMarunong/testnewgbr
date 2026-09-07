@@ -892,7 +892,8 @@ btnUploadArtwork.addEventListener("click", async () => {
     loadAdminArtworks();
     loadCounts();
   } catch (err) {
-    uploadStatus.textContent = "Upload failed. Check your connection.";
+    console.error("Artwork upload failed:", err);
+    uploadStatus.textContent = err?.message || "Upload failed. Check your connection.";
     uploadStatus.className = "upload-status error";
   } finally {
     btnUploadArtwork.disabled = false;
