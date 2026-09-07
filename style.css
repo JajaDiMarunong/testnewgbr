@@ -72,7 +72,7 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
 #screen-home {
   padding-top: max(28px, env(safe-area-inset-top));
   padding-left: 20px; padding-right: 20px;
-  overflow-y: auto;
+  overflow: hidden;
   touch-action: pan-y;
   position: relative;
 }
@@ -155,6 +155,15 @@ button.corner-fabs-right {
 .filter-toast.hidden { opacity: 0; height: 0; padding: 0; margin: 0; overflow: hidden; }
 
 .gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 2px calc(24px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 
 .art-card {
   position: relative;

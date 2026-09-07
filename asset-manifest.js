@@ -5,7 +5,7 @@ const MUSEUM_ASSETS = [
   "./asset-manifest.js", "./sw.js", "./guestbook.html", "./guestbook.css",
   "./guestbook.js", "./admin.html", "./admin.css", "./admin.js",
   "./assets/background.jpg", "./assets/background.png", "./assets/logo.png", "./assets/icon-192.png",
-  "./assets/the-kiss.jpg", "./assets/mona-marker.jpg", "./assets/crisanto-marker.jpg",
+  "./assets/mona-marker.jpg", "./assets/crisanto-marker.jpg",
   "./assets/mcarthurmarker.jpg", "./assets/monalisa-centered.obj",
   "./assets/targets.mind",
   "./assets/mona-centered.obj", "./assets/mona.obj", "./assets/monalisa.mtl",
