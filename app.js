@@ -571,9 +571,10 @@ function renderGallery() {
     return true;
   });
 
-  visible.forEach((art) => {
+  visible.forEach((art, index) => {
     const card = document.createElement("div");
     card.className = "art-card " + (art.unlocked ? "unlocked" : "locked");
+    card.style.setProperty("--i", Math.min(index, 8));
 
     card.innerHTML = `
       <img class="art-card-img" src="${art.image}" alt="${art.name}"
@@ -610,6 +611,17 @@ function renderGallery() {
 // -------------------------------------------------------------------
 // Screen switching
 // -------------------------------------------------------------------
+const NAV_TAB_ORDER = ["home", "scanner", "leaderboard"];
+let lastActiveNavTab = "home";
+
+function animateScreenIn(screenEl, animationClass) {
+  screenEl.classList.remove("enter-left", "enter-right", "enter-top");
+  // Force reflow so the animation replays when switching between two
+  // screens that use the same class.
+  void screenEl.offsetWidth;
+  screenEl.classList.add(animationClass);
+}
+
 function hideAllScreens() {
   screenHome.classList.add("hidden");
   screenScanner.classList.add("hidden");
@@ -624,27 +636,29 @@ function hideAllScreens() {
 
 function showHome() {
   hideAllScreens();
+  animateScreenIn(screenHome, "enter-left");
   screenHome.classList.remove("hidden");
   bottomNav.classList.remove("hidden");
   setActiveNav("home");
   setBgLayerForScreen(false);
   renderGallery();
   updateRunTimer();
+  lastActiveNavTab = "home";
 }
 
 function showScanner() {
   hideAllScreens();
-  screenScanner.classList.remove("hidden");
   bottomNav.classList.add("hidden");
   setBgLayerForScreen(true);
+  screenScanner.classList.remove("hidden");
   scanHint.textContent = "Point your camera at an artwork";
   scanHint.classList.remove("found");
+  lastActiveNavTab = "scanner";
 }
 
 function showBadges() {
   hideAllScreens();
-  screenBadges.classList.add("hidden");
-  renderBadges();
+  animateScreenIn(screenBadges, "enter-top");
   screenBadges.classList.remove("hidden");
   bottomNav.classList.add("hidden");
   setBgLayerForScreen(false);
@@ -652,16 +666,22 @@ function showBadges() {
 
 function showLeaderboard() {
   hideAllScreens();
+  const direction = NAV_TAB_ORDER.indexOf("leaderboard") > NAV_TAB_ORDER.indexOf(lastActiveNavTab)
+    ? "enter-right"
+    : "enter-left";
+  animateScreenIn(screenLeaderboard, direction);
   screenLeaderboard.classList.remove("hidden");
   bottomNav.classList.remove("hidden");
   setActiveNav("leaderboard");
   setBgLayerForScreen(false);
   loadLeaderboard();
   loadNotesBoard();
+  lastActiveNavTab = "leaderboard";
 }
 
 function showLibrary() {
   hideAllScreens();
+  animateScreenIn(screenLibrary, "enter-top");
   renderLibrary();
   screenLibrary.classList.remove("hidden");
   bottomNav.classList.add("hidden");
@@ -670,6 +690,7 @@ function showLibrary() {
 
 function showSettings() {
   hideAllScreens();
+  animateScreenIn(screenSettings, "enter-top");
   settingsCurrentName.textContent = `Currently: ${currentUsername || "—"}`;
   screenSettings.classList.remove("hidden");
   bottomNav.classList.add("hidden");
@@ -753,8 +774,8 @@ function checkAllBadgesBadge() {
 function renderBadges() {
   badgesGrid.innerHTML = Object.values(badges)
     .map(
-      (b) => `
-    <div class="badge-card ${b.earned ? "earned" : ""}">
+      (b, i) => `
+    <div class="badge-card ${b.earned ? "earned" : ""} stagger-in" style="--i:${i}">
       <div class="badge-icon">${b.earned ? b.icon : "🔒"}</div>
       <h4>${b.name}</h4>
       <p>${b.earned ? b.description : "Locked"}</p>
@@ -1183,7 +1204,7 @@ async function loadLeaderboard() {
         const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
         const rankClass = rank <= 3 ? ` rank-${rank}` : "";
         return `
-      <div class="leaderboard-row${rankClass}">
+      <div class="leaderboard-row${rankClass} stagger-in" style="--i:${i}">
         <span class="leaderboard-rank">${medal || "#" + rank}</span>
         <span class="leaderboard-name">${escapeHtml(e.name || "Anonymous")}${
           rank === 1 ? ' <span class="crown">👑</span>' : ""
