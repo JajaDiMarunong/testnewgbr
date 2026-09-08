@@ -363,8 +363,10 @@ button.corner-fabs-right {
   position: fixed; right: 18px; bottom: calc(var(--nav-height) + 18px);
   z-index: 12; width: 54px; height: 54px; border-radius: 50%;
   background: var(--frame-gold); color: #201a10; font-size: 24px;
-  border: none; box-shadow: 0 6px 16px rgba(0,0,0,0.4); cursor: pointer;
+  border: none; box-shadow: 0 6px 16px rgba(0,0,0,0.4); cursor: grab;
+  touch-action: none; user-select: none;
 }
+.chat-head-btn.dragging { cursor: grabbing; }
 .chat-head-btn.hidden { display: none; }
 
 .chat-panel {

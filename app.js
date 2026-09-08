@@ -241,6 +241,7 @@ const btnChatClose = document.getElementById("btn-chat-close");
 const chatMessages = document.getElementById("chat-messages");
 const chatInput = document.getElementById("chat-input");
 const btnChatSend = document.getElementById("btn-chat-send");
+const CHAT_HEAD_POSITION_KEY = "museum_chat_head_position_v1";
 
 const screenSettings = document.getElementById("screen-settings");
 const btnOpenSettings = document.getElementById("btn-open-settings");
@@ -798,6 +799,92 @@ Remember: If it is not about one of the artworks above, you do NOT know it. Peri
 
 let chatHistory = [];
 
+function clampChatHeadPosition(left, top) {
+  const buttonWidth = chatHeadBtn.offsetWidth || 54;
+  const buttonHeight = chatHeadBtn.offsetHeight || 54;
+  const maxLeft = Math.max(0, window.innerWidth - buttonWidth);
+  const maxTop = Math.max(0, window.innerHeight - buttonHeight);
+  return {
+    left: Math.min(Math.max(0, left), maxLeft),
+    top: Math.min(Math.max(0, top), maxTop),
+  };
+}
+
+function setChatHeadPosition(left, top) {
+  const position = clampChatHeadPosition(left, top);
+  chatHeadBtn.style.left = `${position.left}px`;
+  chatHeadBtn.style.top = `${position.top}px`;
+  chatHeadBtn.style.right = "auto";
+  chatHeadBtn.style.bottom = "auto";
+  return position;
+}
+
+function restoreChatHeadPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_HEAD_POSITION_KEY) || "null");
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      setChatHeadPosition(saved.left, saved.top);
+    }
+  } catch (error) {
+    console.warn("Could not restore chat button position:", error);
+  }
+}
+
+restoreChatHeadPosition();
+
+let chatHeadPointerId = null;
+let chatHeadDragOffsetX = 0;
+let chatHeadDragOffsetY = 0;
+let chatHeadPointerStartX = 0;
+let chatHeadPointerStartY = 0;
+let chatHeadWasDragged = false;
+
+chatHeadBtn.addEventListener("pointerdown", (event) => {
+  const rect = chatHeadBtn.getBoundingClientRect();
+  chatHeadPointerId = event.pointerId;
+  chatHeadPointerStartX = event.clientX;
+  chatHeadPointerStartY = event.clientY;
+  chatHeadDragOffsetX = event.clientX - rect.left;
+  chatHeadDragOffsetY = event.clientY - rect.top;
+  chatHeadWasDragged = false;
+  setChatHeadPosition(rect.left, rect.top);
+  chatHeadBtn.classList.add("dragging");
+  chatHeadBtn.setPointerCapture(event.pointerId);
+});
+
+chatHeadBtn.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== chatHeadPointerId) return;
+
+  const movedX = event.clientX - chatHeadPointerStartX;
+  const movedY = event.clientY - chatHeadPointerStartY;
+  if (Math.hypot(movedX, movedY) > 6) chatHeadWasDragged = true;
+
+  setChatHeadPosition(
+    event.clientX - chatHeadDragOffsetX,
+    event.clientY - chatHeadDragOffsetY
+  );
+});
+
+function finishChatHeadDrag(event) {
+  if (event.pointerId !== chatHeadPointerId) return;
+  const rect = chatHeadBtn.getBoundingClientRect();
+  const position = setChatHeadPosition(rect.left, rect.top);
+  localStorage.setItem(CHAT_HEAD_POSITION_KEY, JSON.stringify(position));
+  chatHeadBtn.classList.remove("dragging");
+  chatHeadPointerId = null;
+}
+
+chatHeadBtn.addEventListener("pointerup", finishChatHeadDrag);
+chatHeadBtn.addEventListener("pointercancel", finishChatHeadDrag);
+
+window.addEventListener("resize", () => {
+  if (chatHeadBtn.style.left && chatHeadBtn.style.top) {
+    const rect = chatHeadBtn.getBoundingClientRect();
+    const position = setChatHeadPosition(rect.left, rect.top);
+    localStorage.setItem(CHAT_HEAD_POSITION_KEY, JSON.stringify(position));
+  }
+});
+
 function addChatBubble(text, sender) {
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble ${sender}`;
@@ -808,6 +895,10 @@ function addChatBubble(text, sender) {
 }
 
 chatHeadBtn.addEventListener("click", () => {
+  if (chatHeadWasDragged) {
+    chatHeadWasDragged = false;
+    return;
+  }
   chatPanel.classList.toggle("hidden");
   if (!chatPanel.classList.contains("hidden") && chatMessages.children.length === 0) {
     addChatBubble(`Hi po! I'm Kuya Davon 👋 Ask me anything about the artworks here at ${MUSEUM_NAME}.`, "bot");
