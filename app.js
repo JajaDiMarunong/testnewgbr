@@ -218,6 +218,9 @@ const loadingProgressText = document.getElementById("loading-progress-text");
 const permissionError = document.getElementById("permission-error");
 const btnInstallApp = document.getElementById("btn-install-app");
 const installAppHint = document.getElementById("install-app-hint");
+const settingsInstallRow = document.getElementById("settings-install-app");
+const settingsInstallTitle = document.getElementById("settings-install-title");
+const settingsInstallDesc = document.getElementById("settings-install-desc");
 
 const btnBackHome = document.getElementById("btn-back-home");
 const btnKeepScanning = document.getElementById("btn-keep-scanning");
@@ -323,6 +326,7 @@ function updateInstallUI() {
   if (isStandalone) {
     btnInstallApp.classList.add("hidden");
     installAppHint.classList.add("hidden");
+    settingsInstallRow.classList.add("hidden");
     return;
   }
 
@@ -331,6 +335,9 @@ function updateInstallUI() {
     btnInstallApp.textContent = "Install Museum App";
     btnInstallApp.classList.remove("hidden");
     installAppHint.classList.add("hidden");
+    settingsInstallRow.classList.remove("hidden");
+    settingsInstallTitle.textContent = "Install Museum App";
+    settingsInstallDesc.textContent = "Add the museum to your home screen for offline use";
     return;
   }
 
@@ -340,27 +347,51 @@ function updateInstallUI() {
     btnInstallApp.classList.remove("hidden");
     installAppHint.textContent = "Tap the button above for iOS install steps.";
     installAppHint.classList.remove("hidden");
+    settingsInstallRow.classList.remove("hidden");
+    settingsInstallTitle.textContent = "How to Install";
+    settingsInstallDesc.textContent = "Add to Home Screen from Safari's Share menu";
     return;
   }
+
+  // Prompt not captured yet (slow connection, page reload, etc.) —
+  // the main-page button stays hidden, but Settings keeps a manual
+  // fallback that retries the native prompt or shows OS-specific help.
+  settingsInstallRow.classList.remove("hidden");
+  settingsInstallTitle.textContent = "Install Museum App";
+  settingsInstallDesc.textContent = window.deferredInstallPrompt
+    ? "Add the museum to your home screen for offline use"
+    : "Tap for install help and to retry the install prompt";
 }
 
-btnInstallApp.addEventListener("click", async () => {
+btnInstallApp.addEventListener("click", handleInstallAction);
+
+settingsInstallRow.addEventListener("click", handleInstallAction);
+
+async function handleInstallAction() {
   if (isIOS) {
     alert("To install on iPhone/iPad:\n\n1. Tap the Share button (⬆️) in Safari's toolbar\n2. Scroll down and tap 'Add to Home Screen'\n3. Tap 'Add'");
     return;
   }
   const prompt = window.deferredInstallPrompt;
-  if (!prompt) return;
-  prompt.prompt();
-  await prompt.userChoice;
-  window.deferredInstallPrompt = null;
-  btnInstallApp.classList.add("hidden");
-});
+  if (prompt) {
+    prompt.prompt();
+    await prompt.userChoice;
+    window.deferredInstallPrompt = null;
+    btnInstallApp.classList.add("hidden");
+    updateInstallUI();
+    return;
+  }
+  // No captured prompt (e.g. before the browser fires beforeinstallprompt,
+  // or it was already consumed): give visitors real guidance instead of
+  // silently doing nothing.
+  alert("To install the museum app:\n\nAndroid/Chrome: open the browser menu (⋮) and tap 'Install app' or 'Add to Home screen'.\n\nDesktop: look for the install icon (⊕) in the address bar.");
+}
 
 window.addEventListener("appinstalled", () => {
   window.deferredInstallPrompt = null;
   btnInstallApp.classList.add("hidden");
   installAppHint.classList.add("hidden");
+  updateInstallUI();
 });
 
 // Run now, and also re-run if the late event fires
