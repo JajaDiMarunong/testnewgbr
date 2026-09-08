@@ -659,6 +659,7 @@ function showScanner() {
 function showBadges() {
   hideAllScreens();
   animateScreenIn(screenBadges, "enter-top");
+  renderBadges();
   screenBadges.classList.remove("hidden");
   bottomNav.classList.add("hidden");
   setBgLayerForScreen(false);
