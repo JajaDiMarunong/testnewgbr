@@ -195,6 +195,7 @@ const navButtons = document.querySelectorAll(".nav-btn");
 const galleryGrid = document.getElementById("gallery-grid");
 const progressFill = document.getElementById("progress-fill");
 const progressLabel = document.getElementById("progress-label");
+const runTimer = document.getElementById("run-timer");
 const scanHint = document.getElementById("scan-hint");
 
 const filterButtons = document.querySelectorAll(".filter-btn");
@@ -371,6 +372,7 @@ window.addEventListener('beforeinstallprompt', () => updateInstallUI());
 // -------------------------------------------------------------------
 let currentUsername = null;
 let sessionStartTime = null;
+let finalElapsedSeconds = null;
 let leaderboardSubmitted = false;
 const PROGRESS_STORAGE_KEY = "museum_progress_v1";
 
@@ -379,7 +381,10 @@ function persistProgress() {
     username: currentUsername,
     unlocked: artworks.filter((art) => art.unlocked).map((art) => art.id),
     quizCompleted: artworks.filter((art) => art.quizCompleted).map((art) => art.id),
-    badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned]))
+    badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned])),
+    sessionStartTime,
+    finalElapsedSeconds,
+    leaderboardSubmitted
   };
   localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
 }
@@ -389,6 +394,9 @@ function restoreProgress() {
     const progress = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
     if (!progress) return;
     currentUsername = progress.username || null;
+    sessionStartTime = progress.sessionStartTime || null;
+    finalElapsedSeconds = progress.finalElapsedSeconds ?? null;
+    leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
     const unlocked = new Set(progress.unlocked || []);
     const quizCompleted = new Set(progress.quizCompleted || []);
     artworks.forEach((art) => {
@@ -416,7 +424,6 @@ function submitUsername() {
   }
   currentUsername = name;
   persistProgress();
-  if (!sessionStartTime) sessionStartTime = Date.now();
   screenUsername.classList.add("hidden");
   if (returningToScreenAfterNameChange) {
     returningToScreenAfterNameChange();
@@ -439,6 +446,35 @@ settingsReplayTutorial.addEventListener("click", () => {
   showHome();
   initTour();
 });
+
+// -------------------------------------------------------------------
+// Run timer — starts at the first unlock, freezes when the
+// leaderboard entry is submitted
+// -------------------------------------------------------------------
+function formatElapsedClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function updateRunTimer() {
+  if (!sessionStartTime) {
+    runTimer.classList.add("hidden");
+    return;
+  }
+  runTimer.classList.remove("hidden");
+  const totalSeconds =
+    leaderboardSubmitted && finalElapsedSeconds != null
+      ? finalElapsedSeconds
+      : (Date.now() - sessionStartTime) / 1000;
+  runTimer.textContent = `${leaderboardSubmitted ? "🏁" : "⏱"} ${formatElapsedClock(totalSeconds)}`;
+}
+
+setInterval(updateRunTimer, 1000);
 
 // -------------------------------------------------------------------
 // Device ID
@@ -593,6 +629,7 @@ function showHome() {
   setActiveNav("home");
   setBgLayerForScreen(false);
   renderGallery();
+  updateRunTimer();
 }
 
 function showScanner() {
@@ -1813,8 +1850,10 @@ function handleTargetFound(art, targetIndex, targetEl) {
   const wasAlreadyUnlocked = art.unlocked;
   art.unlocked = true;
   if (firstTimeEver) awardBadge("firstScan");
+  if (!wasAlreadyUnlocked && !sessionStartTime) sessionStartTime = Date.now();
   persistProgress();
   checkAllUnlockedBadge();
+  updateRunTimer();
 
   if (!wasAlreadyUnlocked) checkCollectionComplete();
   showUnlockModal(art, wasAlreadyUnlocked);
@@ -1831,8 +1870,10 @@ function checkCollectionComplete() {
   const allUnlocked = galleryArtworks.length > 0 && galleryArtworks.every((a) => a.unlocked);
   if (allUnlocked && !leaderboardSubmitted && sessionStartTime) {
     leaderboardSubmitted = true;
-    const elapsed = (Date.now() - sessionStartTime) / 1000;
-    submitLeaderboardEntry(currentUsername || "Anonymous", elapsed);
+    finalElapsedSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
+    persistProgress();
+    submitLeaderboardEntry(currentUsername || "Anonymous", finalElapsedSeconds);
+    updateRunTimer();
   }
 }
 
