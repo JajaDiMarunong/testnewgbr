@@ -182,6 +182,8 @@ const filterToast = document.getElementById("filter-toast");
 const unlockModal = document.getElementById("unlock-modal");
 const modalTitle = document.getElementById("modal-title");
 const modalDesc = document.getElementById("modal-desc");
+const unlockEyebrow = document.getElementById("unlock-eyebrow");
+const unlockBadge = document.getElementById("unlock-badge");
 
 const badgeToast = document.getElementById("badge-toast");
 const badgeToastIcon = document.getElementById("badge-toast-icon");
@@ -625,9 +627,16 @@ btnOpenSettings.addEventListener("click", showSettings);
 btnSettingsBack.addEventListener("click", showHome);
 btnImmersiveBack.addEventListener("click", exitImmersive);
 
-function showUnlockModal(art) {
+function showUnlockModal(art, wasAlreadyUnlocked) {
   modalTitle.textContent = art.name;
   modalDesc.textContent = art.details;
+  modalDesc.scrollTop = 0;
+
+  const firstUnlock = art.showInMainCollection !== false && !wasAlreadyUnlocked;
+  unlockEyebrow.textContent = firstUnlock ? "Artwork Unlocked" : "Artwork Scanned";
+  unlockBadge.textContent = firstUnlock ? "✓" : "📷";
+  unlockBadge.classList.toggle("scanned", !firstUnlock);
+
   unlockModal.classList.remove("hidden");
 }
 function hideUnlockModal() {
@@ -1757,14 +1766,8 @@ function handleTargetFound(art, targetIndex, targetEl) {
   if (firstTimeEver) awardBadge("firstScan");
   persistProgress();
 
-  if (art.modelObj) {
-    if (!wasAlreadyUnlocked) {
-      showUnlockModal(art);
-      checkCollectionComplete();
-    }
-  } else {
-    showUnlockModal(art);
-  }
+  if (!wasAlreadyUnlocked) checkCollectionComplete();
+  showUnlockModal(art, wasAlreadyUnlocked);
 }
 
 function handleTargetLost() {

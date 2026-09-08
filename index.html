@@ -11,7 +11,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Museum AR Collection</title>
-<link rel="stylesheet" href="style.css?v=23" />
+<link rel="stylesheet" href="style.css?v=24" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -413,9 +413,9 @@
        UNLOCK CELEBRATION MODAL
        ============================================================ -->
   <div id="unlock-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-badge">✓</div>
-      <p class="modal-eyebrow">Artwork Unlocked</p>
+    <div class="modal-card unlock-card">
+      <div id="unlock-badge" class="modal-badge">✓</div>
+      <p id="unlock-eyebrow" class="modal-eyebrow">Artwork Unlocked</p>
       <h2 id="modal-title">—</h2>
       <p id="modal-desc" class="modal-desc">—</p>
       <div class="modal-actions">
@@ -450,6 +450,6 @@
     <p>Please allow camera access and reload. This must be opened over HTTPS (or localhost) on your device.</p>
   </div>
 
-  <script src="app.js?v=23" defer></script>
+  <script src="app.js?v=24" defer></script>
 </body>
 </html>
