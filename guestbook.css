@@ -135,7 +135,7 @@ html, body {
 /* ---------------- Sticky Notes (TV size) ---------------- */
 .note-sticky {
   position: absolute;
-  width: 180px; min-height: 180px;
+  width: 180px; height: 200px;
   padding: 16px 14px 36px 14px;
   border-radius: 4px 18px 4px 4px;
   box-shadow: 3px 5px 14px rgba(0,0,0,0.4);

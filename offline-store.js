@@ -5,7 +5,7 @@
   const DB_VERSION = 1;
   const DATA_STORE = "responses";
   const QUEUE_STORE = "queue";
-  const ASSET_CACHE = "gbr-museum-assets-v1";
+  const ASSET_CACHE = "gbr-museum-assets-v2";
   const FIREBASE_HOST = "gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
   const nativeFetch = window.fetch.bind(window);
 

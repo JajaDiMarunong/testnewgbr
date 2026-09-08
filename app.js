@@ -1125,16 +1125,38 @@ async function submitLeaderboardEntry(name, timeSeconds) {
 const NOTE_COLORS = ["#f4d35e", "#f2a19b", "#a8d5ba", "#9fc6e0", "#c9a8d8", "#f4f1ea"];
 const BOARD_WIDTH = 1200;
 const BOARD_HEIGHT = 800;
+const NOTE_W = 140;
+const NOTE_H = 160;
+const NOTE_MARGIN = 36;
+const BOARD_PADDING = 30;
 let allNotesCache = [];
 let boardScale = 1;
 let boardX = 0;
 let boardY = 0;
 
+function getNotesBoardColumns() {
+  return Math.max(
+    1,
+    Math.floor((BOARD_WIDTH - BOARD_PADDING * 2 - NOTE_W) / (NOTE_W + NOTE_MARGIN)) + 1
+  );
+}
+
+function getNotesBoardHeight(noteCount) {
+  const rows = Math.max(1, Math.ceil(noteCount / getNotesBoardColumns()));
+  return Math.max(
+    BOARD_HEIGHT,
+    BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * NOTE_MARGIN
+  );
+}
+
 function fitNotesBoardToViewport() {
   const wrapW = notesBoardWrap.clientWidth;
   const wrapH = notesBoardWrap.clientHeight;
+  const boardHeight = getNotesBoardHeight(allNotesCache.length);
+  notesBoard.style.width = `${BOARD_WIDTH}px`;
+  notesBoard.style.height = `${boardHeight}px`;
   const scaleX = wrapW / BOARD_WIDTH;
-  const scaleY = wrapH / BOARD_HEIGHT;
+  const scaleY = wrapH / boardHeight;
   boardScale = Math.min(scaleX, scaleY, 1);
   boardX = 0;
   boardY = 0;
@@ -1149,9 +1171,8 @@ function applyBoardTransform() {
 }
 
 async function loadNotesBoard() {
-  notesBoard.innerHTML = `<p class="leaderboard-status" style="padding:10px;">Loading…</p>`;
   try {
-    const res = await fetch(`${FIREBASE_URL}/notes.json`);
+    const res = await fetch(`${FIREBASE_URL}/notes.json`, { cache: "no-store" });
     if (!res.ok) throw new Error("status " + res.status);
     const data = await res.json();
     allNotesCache = data
@@ -1165,57 +1186,24 @@ async function loadNotesBoard() {
   }
 }
 
-const NOTE_W = 140;
-const NOTE_H = 160;
-const NOTE_MARGIN = 16;
-
-function findNonOverlappingPosition(existingNotes) {
-  const occupied = existingNotes.map((n) => ({
-    x: n.x, y: n.y,
-    w: NOTE_W + NOTE_MARGIN, h: NOTE_H + NOTE_MARGIN,
-  }));
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const x = 20 + Math.random() * (BOARD_WIDTH - NOTE_W - 40);
-    const y = 20 + Math.random() * (BOARD_HEIGHT - NOTE_H - 40);
-    let overlaps = false;
-    for (const o of occupied) {
-      if (x < o.x + o.w && x + NOTE_W + NOTE_MARGIN > o.x &&
-          y < o.y + o.h && y + NOTE_H + NOTE_MARGIN > o.y) {
-        overlaps = true; break;
-      }
-    }
-    if (!overlaps) return { x, y };
-  }
-  const cols = Math.floor((BOARD_WIDTH - 40) / (NOTE_W + NOTE_MARGIN));
-  const rows = Math.floor((BOARD_HEIGHT - 40) / (NOTE_H + NOTE_MARGIN));
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = 20 + c * (NOTE_W + NOTE_MARGIN);
-      const y = 20 + r * (NOTE_H + NOTE_MARGIN);
-      let overlaps = false;
-      for (const o of occupied) {
-        if (x < o.x + o.w && x + NOTE_W + NOTE_MARGIN > o.x &&
-            y < o.y + o.h && y + NOTE_H + NOTE_MARGIN > o.y) {
-          overlaps = true; break;
-        }
-      }
-      if (!overlaps) return { x, y };
-    }
-  }
-  return { x: 20 + Math.random() * (BOARD_WIDTH - NOTE_W - 40), y: 20 + Math.random() * (BOARD_HEIGHT - NOTE_H - 40) };
+function getNoteBoardPosition(index) {
+  const columns = getNotesBoardColumns();
+  return {
+    x: BOARD_PADDING + (index % columns) * (NOTE_W + NOTE_MARGIN),
+    y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
+  };
 }
 
 function renderNotesBoard() {
   notesBoard.innerHTML = "";
-  const placed = [];
+  const notesForDisplay = [...allNotesCache].sort(
+    (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.deviceId.localeCompare(b.deviceId)
+  );
 
-  allNotesCache.forEach((note) => {
-    if (note.x == null || note.y == null) {
-      const pos = findNonOverlappingPosition(placed);
-      note.x = pos.x;
-      note.y = pos.y;
-    }
-    placed.push({ x: note.x, y: note.y });
+  notesForDisplay.forEach((note, index) => {
+    const pos = getNoteBoardPosition(index);
+    note.x = pos.x;
+    note.y = pos.y;
 
     const el = document.createElement("div");
     el.className =

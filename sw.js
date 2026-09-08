@@ -1,7 +1,7 @@
 importScripts("./asset-manifest.js");
 
-const CACHE_NAME = "gbr-museum-assets-v1";
-const DATA_CACHE = "gbr-museum-runtime-v1";
+const CACHE_NAME = "gbr-museum-assets-v2";
+const DATA_CACHE = "gbr-museum-runtime-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
@@ -15,7 +15,15 @@ self.addEventListener("install", (event) => {
   })());
 });
 
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames
+      .filter((name) => name.startsWith("gbr-museum-") && name !== CACHE_NAME && name !== DATA_CACHE)
+      .map((name) => caches.delete(name)));
+    await self.clients.claim();
+  })());
+});
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;

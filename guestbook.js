@@ -10,8 +10,9 @@ const BOARD_WIDTH = 1600;
 const BOARD_HEIGHT = 1000;
 const NOTE_W = 180;
 const NOTE_H = 200;
-const NOTE_MARGIN = 24;
-const REFRESH_INTERVAL = 30; // seconds
+const NOTE_MARGIN = 36;
+const BOARD_PADDING = 30;
+const REFRESH_INTERVAL = 5; // seconds
 
 // -------------------------------------------------------------------
 // DOM refs
@@ -41,6 +42,8 @@ let cachedLeaderboard = [];
 let refreshTimer = null;
 let countdownTimer = null;
 let countdown = REFRESH_INTERVAL;
+let notesSignature = "";
+let loadInProgress = false;
 
 // -------------------------------------------------------------------
 // Boot
@@ -61,12 +64,30 @@ function startAutoRefresh() {
   countdownTimer = setInterval(() => {
     countdown--;
     if (countdown <= 0) countdown = REFRESH_INTERVAL;
-    refreshHint.textContent = `Refreshing in ${countdown}s`;
+    refreshHint.textContent = `Live · refreshing in ${countdown}s`;
   }, 1000);
 }
 
+function refreshNow() {
+  countdown = REFRESH_INTERVAL;
+  refreshHint.textContent = "Live · refreshing now";
+  loadData();
+}
+
+window.addEventListener("focus", refreshNow);
+window.addEventListener("online", refreshNow);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshNow();
+});
+
 async function loadData() {
-  await Promise.all([loadNotesBoard(), loadLeaderboard(), loadStats()]);
+  if (loadInProgress) return;
+  loadInProgress = true;
+  try {
+    await Promise.all([loadNotesBoard(), loadLeaderboard(), loadStats()]);
+  } finally {
+    loadInProgress = false;
+  }
 }
 
 // -------------------------------------------------------------------
@@ -89,8 +110,8 @@ function updateClock() {
 async function loadStats() {
   try {
     const [notesRes, lbRes] = await Promise.all([
-      fetch(`${FIREBASE_URL}/notes.json`),
-      fetch(`${FIREBASE_URL}/leaderboard.json`),
+      fetch(`${FIREBASE_URL}/notes.json`, { cache: "no-store" }),
+      fetch(`${FIREBASE_URL}/leaderboard.json`, { cache: "no-store" }),
     ]);
     const notesData = await notesRes.json();
     const lbData = await lbRes.json();
@@ -108,8 +129,11 @@ async function loadStats() {
 function fitBoardToViewport() {
   const wrapW = notesBoardWrap.clientWidth;
   const wrapH = notesBoardWrap.clientHeight;
+  const boardHeight = getNotesBoardHeight(allNotesCache.length);
+  notesBoard.style.width = `${BOARD_WIDTH}px`;
+  notesBoard.style.height = `${boardHeight}px`;
   const scaleX = wrapW / BOARD_WIDTH;
-  const scaleY = wrapH / BOARD_HEIGHT;
+  const scaleY = wrapH / boardHeight;
   boardScale = Math.min(scaleX, scaleY, 1);
   boardX = 0;
   boardY = 0;
@@ -128,81 +152,67 @@ function applyBoardTransform() {
 // -------------------------------------------------------------------
 async function loadNotesBoard() {
   try {
-    const res = await fetch(`${FIREBASE_URL}/notes.json`);
+    const res = await fetch(`${FIREBASE_URL}/notes.json`, { cache: "no-store" });
     const data = await res.json();
     const newNotes = data
       ? Object.entries(data).map(([deviceId, note]) => ({ ...note, deviceId }))
       : [];
 
-    // Only re-render if notes actually changed (compare lengths + last timestamp)
-    const needsRender = newNotes.length !== allNotesCache.length ||
-      (newNotes[0]?.timestamp || 0) !== (allNotesCache[0]?.timestamp || 0);
+    const signature = JSON.stringify(newNotes);
+    const needsRender = signature !== notesSignature;
 
     allNotesCache = newNotes;
+    notesSignature = signature;
 
     if (needsRender) {
       renderNotesBoard();
       fitBoardToViewport();
     }
   } catch (err) {
-    notesBoard.innerHTML = `<p style="color:rgba(42,35,32,0.6);padding:40px;text-align:center;font-size:18px;">Couldn't load notes.</p>`;
+    if (allNotesCache.length === 0) {
+      notesBoard.innerHTML = `<p style="color:rgba(42,35,32,0.6);padding:40px;text-align:center;font-size:18px;">Couldn't load notes.</p>`;
+    }
   }
 }
 
 // -------------------------------------------------------------------
 // Overlap prevention
 // -------------------------------------------------------------------
-function findNonOverlappingPosition(existingNotes) {
-  const occupied = existingNotes.map((n) => ({
-    x: n.x, y: n.y,
-    w: NOTE_W + NOTE_MARGIN, h: NOTE_H + NOTE_MARGIN,
-  }));
+function getNotesBoardColumns() {
+  return Math.max(
+    1,
+    Math.floor((BOARD_WIDTH - BOARD_PADDING * 2 - NOTE_W) / (NOTE_W + NOTE_MARGIN)) + 1
+  );
+}
 
-  for (let attempt = 0; attempt < 120; attempt++) {
-    const x = 30 + Math.random() * (BOARD_WIDTH - NOTE_W - 60);
-    const y = 30 + Math.random() * (BOARD_HEIGHT - NOTE_H - 60);
-    let overlaps = false;
-    for (const o of occupied) {
-      if (x < o.x + o.w && x + NOTE_W + NOTE_MARGIN > o.x &&
-          y < o.y + o.h && y + NOTE_H + NOTE_MARGIN > o.y) {
-        overlaps = true; break;
-      }
-    }
-    if (!overlaps) return { x, y };
-  }
+function getNotesBoardHeight(noteCount) {
+  const rows = Math.max(1, Math.ceil(noteCount / getNotesBoardColumns()));
+  return Math.max(
+    BOARD_HEIGHT,
+    BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * NOTE_MARGIN
+  );
+}
 
-  // Grid fallback
-  const cols = Math.floor((BOARD_WIDTH - 60) / (NOTE_W + NOTE_MARGIN));
-  const rows = Math.floor((BOARD_HEIGHT - 60) / (NOTE_H + NOTE_MARGIN));
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = 30 + c * (NOTE_W + NOTE_MARGIN);
-      const y = 30 + r * (NOTE_H + NOTE_MARGIN);
-      let overlaps = false;
-      for (const o of occupied) {
-        if (x < o.x + o.w && x + NOTE_W + NOTE_MARGIN > o.x &&
-            y < o.y + o.h && y + NOTE_H + NOTE_MARGIN > o.y) {
-          overlaps = true; break;
-        }
-      }
-      if (!overlaps) return { x, y };
-    }
-  }
-
-  return { x: 30 + Math.random() * (BOARD_WIDTH - NOTE_W - 60), y: 30 + Math.random() * (BOARD_HEIGHT - NOTE_H - 60) };
+function getNoteBoardPosition(index) {
+  const columns = getNotesBoardColumns();
+  return {
+    x: BOARD_PADDING + (index % columns) * (NOTE_W + NOTE_MARGIN),
+    y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
+  };
 }
 
 function renderNotesBoard() {
   notesBoard.innerHTML = "";
-  const placed = [];
+  const notesForDisplay = [...allNotesCache].sort(
+    (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.deviceId.localeCompare(b.deviceId)
+  );
 
   // Always recalculate positions for TV display — ignore stored x/y
   // since they were calculated for a different board size / note size
-  allNotesCache.forEach((note, idx) => {
-    const pos = findNonOverlappingPosition(placed);
+  notesForDisplay.forEach((note, idx) => {
+    const pos = getNoteBoardPosition(idx);
     note.x = pos.x;
     note.y = pos.y;
-    placed.push({ x: note.x, y: note.y });
 
     const el = document.createElement("div");
     el.className = "note-sticky" + (note.type === "photo" ? " type-photo" : "");
