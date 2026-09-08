@@ -139,6 +139,11 @@ button.corner-fabs-right {
   pointer-events: none;
   animation: logoShine 4.6s ease-in-out 1.8s infinite;
 }
+.home-logo-divider {
+  width: 46px; height: 2px;
+  background: var(--frame-gold);
+  margin: 0 auto 12px auto;
+}
 
 @keyframes logoDropIn {
   from { opacity: 0; transform: translateY(-22px) scale(0.88); }
