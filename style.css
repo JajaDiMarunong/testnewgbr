@@ -262,8 +262,8 @@ button.corner-fabs-right {
 }
 .detail-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); touch-action: pan-y; }
 
-.detail-hero { width: 100%; aspect-ratio: 4 / 3; background: rgba(0,0,0,0.4); overflow: hidden; }
-.detail-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.detail-hero { width: 100%; background: rgba(0,0,0,0.4); overflow: hidden; }
+.detail-hero img { width: 100%; height: auto; max-height: 52vh; object-fit: contain; display: block; }
 
 .detail-body { padding: 20px; }
 .detail-body h2 { font-size: clamp(20px, 6vw, 26px); margin: 0 0 12px 0; }
@@ -307,7 +307,7 @@ button.corner-fabs-right {
 }
 .library-card-info { padding: 10px 12px; flex: 1; min-width: 0; }
 .library-card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.library-card-title-row h4 { margin: 0; font-family: Georgia, serif; font-size: 14px; }
+.library-card-title-row h4 { margin: 0; font-family: Georgia, serif; font-size: 14px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .model-badge {
   flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em;
   background: var(--frame-gold); color: #201a10;
@@ -330,8 +330,8 @@ button.corner-fabs-right {
   display: flex; flex-direction: column;
 }
 .library-detail-scroll { overflow-y: auto; touch-action: pan-y; }
-.library-detail-hero { width: 100%; aspect-ratio: 4 / 3; background: rgba(0,0,0,0.4); flex-shrink: 0; }
-.library-detail-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.library-detail-hero { width: 100%; background: rgba(0,0,0,0.4); flex-shrink: 0; }
+.library-detail-hero img { width: 100%; height: auto; max-height: 48vh; object-fit: contain; display: block; }
 .library-detail-body { padding: 18px 20px 4px; }
 .library-detail-body h2 { font-size: 19px; margin: 0; }
 

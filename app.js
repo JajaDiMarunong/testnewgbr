@@ -148,6 +148,27 @@ const badges = {
     icon: "📝",
     earned: false,
   },
+  allUnlocked: {
+    id: "allUnlocked",
+    name: "All Unlocked",
+    description: "Unlock every artwork in the collection",
+    icon: "🔓",
+    earned: false,
+  },
+  allQuizzes: {
+    id: "allQuizzes",
+    name: "All Quizzes",
+    description: "Complete every artwork quiz",
+    icon: "🎓",
+    earned: false,
+  },
+  allBadges: {
+    id: "allBadges",
+    name: "All Badges",
+    description: "Collect every other badge",
+    icon: "👑",
+    earned: false,
+  },
 };
 
 function allBadgesEarned() {
@@ -666,7 +687,30 @@ function awardBadge(key) {
   badge.earned = true;
   persistProgress();
   showBadgeToast(badge);
+  checkAllBadgesBadge();
   if (allBadgesEarned()) updateNotesGate();
+}
+
+function getCollectionArtworks() {
+  return artworks.filter((a) => a.published !== false && a.showInMainCollection !== false);
+}
+
+function checkAllUnlockedBadge() {
+  const collection = getCollectionArtworks();
+  if (collection.length > 0 && collection.every((a) => a.unlocked)) awardBadge("allUnlocked");
+}
+
+function checkAllQuizzesBadge() {
+  const quizArtworks = getCollectionArtworks().filter((a) => a.quiz && a.quiz.length > 0);
+  if (quizArtworks.length > 0 && quizArtworks.every((a) => a.quizCompleted)) awardBadge("allQuizzes");
+}
+
+function checkAllBadgesBadge() {
+  if (badges.allBadges.earned) return;
+  const otherKeys = Object.keys(badges).filter((key) => key !== "allBadges");
+  if (otherKeys.length > 0 && otherKeys.every((key) => badges[key].earned)) {
+    setTimeout(() => awardBadge("allBadges"), 2700);
+  }
 }
 
 function renderBadges() {
@@ -1068,6 +1112,7 @@ btnQuizNext.addEventListener("click", () => {
     art.quizCompleted = true;
     if (firstTimeCompletingAnyQuiz) awardBadge("firstQuiz");
     persistProgress();
+    checkAllQuizzesBadge();
     openDetail(quizArtId);
   }
 });
@@ -1247,11 +1292,15 @@ function renderNotesBoard() {
   });
 }
 
-function updateNewNoteButton() {
+function updateNotesGate() {
   const unlocked = allBadgesEarned();
-  const myNote = allNotesCache.find((n) => n.deviceId === myDeviceId);
   btnNewNote.classList.toggle("hidden", !unlocked);
   notesLockedMsg.classList.toggle("hidden", unlocked);
+}
+
+function updateNewNoteButton() {
+  updateNotesGate();
+  const myNote = allNotesCache.find((n) => n.deviceId === myDeviceId);
   btnNewNote.textContent = myNote ? "✏️ Edit My Note" : "+ New Note";
 }
 
@@ -1765,6 +1814,7 @@ function handleTargetFound(art, targetIndex, targetEl) {
   art.unlocked = true;
   if (firstTimeEver) awardBadge("firstScan");
   persistProgress();
+  checkAllUnlockedBadge();
 
   if (!wasAlreadyUnlocked) checkCollectionComplete();
   showUnlockModal(art, wasAlreadyUnlocked);
@@ -2285,6 +2335,8 @@ async function bootMuseum() {
   }
   await initArtworks();
   restoreProgress();
+  checkAllUnlockedBadge();
+  checkAllQuizzesBadge();
   if (currentUsername) {
     screenUsername.classList.add("hidden");
     showHome();
