@@ -2134,13 +2134,19 @@ function showTourStep() {
     if (el) {
       highlightedEl = el;
       el.classList.add("tour-highlight");
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (getComputedStyle(el).position !== "fixed") {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        resetPageScroll();
+      }
       overlay.classList.add("has-highlight");
     } else {
       overlay.classList.remove("has-highlight");
+      resetPageScroll();
     }
   } else {
     overlay.classList.remove("has-highlight");
+    resetPageScroll();
   }
 
   positionTourCard();
@@ -2209,9 +2215,16 @@ function prevTourStep() {
   }
 }
 
+function resetPageScroll() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
 function hideTour() {
   localStorage.setItem("museum_tour_seen", "1");
   clearTourHighlight();
+  resetPageScroll();
   document.getElementById("tour-overlay").classList.add("hidden");
   showHome();
   bottomNav.classList.remove("hidden");

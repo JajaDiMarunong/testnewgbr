@@ -106,38 +106,26 @@ button.corner-fabs-right {
 
 .home-logo-wrap {
   position: relative;
-  width: 120px; height: 120px;
-  margin: 0 auto 14px auto;
+  width: 60px; height: 60px;
+  margin: 0 auto 12px auto;
 }
 .home-logo-wrap::before {
   content: "";
   position: absolute;
-  inset: -16px;
+  inset: -8px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(201,168,118,0.30) 0%, transparent 65%);
   z-index: -1;
   pointer-events: none;
   animation: logoGlowPulse 3.6s ease-in-out 0.9s infinite;
 }
+
 .home-logo {
   width: 100%; height: 100%;
   display: block;
-  border-radius: 26px;
-  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.5));
-  animation: logoDropIn 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-             logoFloat 3.6s ease-in-out 0.9s infinite;
-}
-.home-logo-wrap::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 26px;
-  background: linear-gradient(115deg, transparent 30%, rgba(255,246,222,0.08) 42%, rgba(255,246,222,0.5) 50%, rgba(255,246,222,0.08) 58%, transparent 70%);
-  background-size: 240% 100%;
-  background-position: 130% 0;
-  opacity: 0;
-  pointer-events: none;
-  animation: logoShine 4.6s ease-in-out 1.8s infinite;
+  border-radius: 13px;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+  animation: logoDropIn 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .home-logo-divider {
   width: 46px; height: 2px;
@@ -153,14 +141,9 @@ button.corner-fabs-right {
   0%, 100% { opacity: 0.55; transform: scale(0.94); }
   50% { opacity: 1; transform: scale(1.1); }
 }
-@keyframes logoShine {
-  0%, 15% { background-position: 130% 0; opacity: 0; }
-  25% { opacity: 0.85; }
-  45%, 100% { background-position: -30% 0; opacity: 0; }
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .home-logo, .home-logo-wrap::before, .home-logo-wrap::after { animation: none; }
+  .home-logo, .home-logo-wrap::before { animation: none; }
 }
 
 .sub {
