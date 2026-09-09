@@ -805,6 +805,26 @@ button.corner-fabs-right {
 .unlock-card .modal-desc::-webkit-scrollbar-track { background: transparent; }
 .unlock-card .modal-desc::-webkit-scrollbar-thumb { background: rgba(201, 168, 118, 0.45); border-radius: 999px; }
 .modal-badge.scanned { background: var(--frame-gold); }
+
+.unlock-confetti {
+  position: fixed; inset: 0; z-index: 60; overflow: hidden;
+  pointer-events: none;
+}
+.confetti-piece {
+  position: absolute; left: 50%; top: 34%;
+  width: 8px; height: 14px; border-radius: 2px;
+  background: var(--color); opacity: 0;
+  animation: unlockConfettiBurst var(--duration) cubic-bezier(0.2, 0.8, 0.25, 1) var(--delay) forwards;
+}
+@keyframes unlockConfettiBurst {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); }
+  18% { opacity: 1; transform: translate(calc(-50% + var(--mid-x)), calc(-50% + var(--mid-y))) rotate(var(--rotate)); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--rotate)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unlock-confetti { display: none; }
+}
 .modal-badge {
   width: 48px; height: 48px; border-radius: 50%; background: var(--success);
   color: #0e0d0c; display: flex; align-items: center; justify-content: center;
