@@ -136,7 +136,7 @@
             <input type="file" id="artwork-skybox" accept=".glb,model/gltf-binary" />
           </div>
 
-          <div class="form-row">
+<div class="form-row">
             <div class="form-group">
               <label>AR Model Scale</label>
               <input id="artwork-model-scale" class="text-input" type="number" min="0.001" max="10" step="0.001" value="0.5" />
@@ -147,6 +147,25 @@
               <input id="artwork-model-forward" class="text-input" type="number" min="-5" max="5" step="0.01" value="0.1" />
               <span class="upload-hint">Crisanto uses 0.1</span>
             </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Immersive Scale</label>
+              <input id="artwork-immersive-scale" class="text-input" type="number" min="0.001" max="100" step="0.01" value="1" />
+              <span class="upload-hint">Skybox size in immersive view (Crisanto: 1, MacArthur: 3.5)</span>
+            </div>
+            <div class="form-group">
+              <label>Immersive Rotation (X Y Z)</label>
+              <input id="artwork-immersive-rotation" class="text-input" type="text" value="0 0 0" placeholder="e.g. 0 270 0" />
+              <span class="upload-hint">Degrees: pitch yaw roll (MacArthur: 0 270 0)</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Immersive Forward Position (Z)</label>
+            <input id="artwork-immersive-forward" class="text-input" type="number" min="-20" max="20" step="0.1" value="-3" />
+            <span class="upload-hint">Distance from camera in immersive view (negative = forward). Default: -3</span>
           </div>
 
           <div class="form-group">

@@ -148,6 +148,9 @@ const artworkModelInput = document.getElementById("artwork-model");
 const artworkSkyboxInput = document.getElementById("artwork-skybox");
 const artworkModelScaleInput = document.getElementById("artwork-model-scale");
 const artworkModelForwardInput = document.getElementById("artwork-model-forward");
+const artworkImmersiveScaleInput = document.getElementById("artwork-immersive-scale");
+const artworkImmersiveRotationInput = document.getElementById("artwork-immersive-rotation");
+const artworkImmersiveForwardInput = document.getElementById("artwork-immersive-forward");
 const artworkMainInput = document.getElementById("artwork-main");
 const artworkScannableInput = document.getElementById("artwork-scannable");
 const artworkPublishedInput = document.getElementById("artwork-published");
@@ -712,6 +715,9 @@ function startArtworkSettingsEdit(art) {
   document.getElementById("artwork-details").value = art.details || "";
   artworkModelScaleInput.value = numberOrDefault(art.baseScale, 0.5);
   artworkModelForwardInput.value = numberOrDefault(art.modelPositionZ, 0.1);
+  artworkImmersiveScaleInput.value = numberOrDefault(art.immersiveScale, 1);
+  artworkImmersiveRotationInput.value = art.immersiveRotation || "0 0 0";
+  artworkImmersiveForwardInput.value = numberOrDefault(art.immersiveForward, -3);
   artworkMainInput.checked = art.showInMainCollection !== false;
   artworkScannableInput.checked = art.scannable !== false;
   artworkPublishedInput.checked = art.published !== false;
@@ -861,8 +867,11 @@ btnUploadArtwork.addEventListener("click", async () => {
   if (editingArtworkId) {
     const baseScale = numberOrDefault(artworkModelScaleInput.value, NaN);
     const modelPositionZ = numberOrDefault(artworkModelForwardInput.value, NaN);
-    if (!Number.isFinite(baseScale) || baseScale <= 0 || !Number.isFinite(modelPositionZ)) {
-      uploadStatus.textContent = "Enter a valid positive model scale and a valid forward position.";
+    const immersiveScale = numberOrDefault(artworkImmersiveScaleInput.value, NaN);
+    const immersiveRotation = artworkImmersiveRotationInput.value.trim();
+    const immersiveForward = numberOrDefault(artworkImmersiveForwardInput.value, NaN);
+    if (!Number.isFinite(baseScale) || baseScale <= 0 || !Number.isFinite(modelPositionZ) || !Number.isFinite(immersiveScale) || immersiveScale <= 0 || !Number.isFinite(immersiveForward)) {
+      uploadStatus.textContent = "Enter valid positive scales and valid forward positions.";
       uploadStatus.className = "upload-status error";
       return;
     }
@@ -874,7 +883,7 @@ btnUploadArtwork.addEventListener("click", async () => {
       const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseScale, modelPositionZ }),
+        body: JSON.stringify({ baseScale, modelPositionZ, immersiveScale, immersiveRotation, immersiveForward }),
       });
       if (!response.ok) throw new Error(`Firebase artwork settings save failed (${response.status})`);
       uploadStatus.textContent = "Artwork settings saved successfully!";
@@ -926,7 +935,7 @@ btnUploadArtwork.addEventListener("click", async () => {
       ? await uploadSupabaseAsset(skyboxFile, `${basePath}/skybox.glb`)
       : null;
 
-    const artwork = {
+const artwork = {
       name,
       imageUrl,
       markerImageUrl: markerUrl,
@@ -938,6 +947,9 @@ btnUploadArtwork.addEventListener("click", async () => {
       details,
       baseScale: numberOrDefault(artworkModelScaleInput.value, 0.5),
       modelPositionZ: numberOrDefault(artworkModelForwardInput.value, 0.1),
+      immersiveScale: numberOrDefault(artworkImmersiveScaleInput.value, 1),
+      immersiveRotation: artworkImmersiveRotationInput.value.trim() || "0 0 0",
+      immersiveForward: numberOrDefault(artworkImmersiveForwardInput.value, -3),
       icon: "🖼️",
       showInMainCollection: artworkMainInput.checked,
       scannable: artworkScannableInput.checked,

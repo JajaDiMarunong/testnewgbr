@@ -2031,7 +2031,7 @@ async function initArtworks() {
     if (res.ok) {
       const data = await res.json();
       if (data) {
-        const uploaded = Object.entries(data).map(([key, val]) => ({
+const uploaded = Object.entries(data).map(([key, val]) => ({
           id: key,
           name: val.name,
           image: val.imageUrl || val.image,
@@ -2047,6 +2047,9 @@ async function initArtworks() {
           immersiveSkybox: val.immersiveSkyboxUrl || null,
           baseScale: val.baseScale == null ? 0.5 : Number(val.baseScale),
           modelPositionZ: val.modelPositionZ == null ? 0.1 : Number(val.modelPositionZ),
+          immersiveScale: val.immersiveScale == null ? 1 : Number(val.immersiveScale),
+          immersiveRotation: val.immersiveRotation || "0 0 0",
+          immersiveForward: val.immersiveForward == null ? -3 : Number(val.immersiveForward),
           icon: val.icon || "🖼️",
           unlocked: false,
           quizCompleted: false,
@@ -2316,80 +2319,6 @@ window.addEventListener("resize", () => {
 // -------------------------------------------------------------------
 // Immersive Mode (markerless skybox)
 // -------------------------------------------------------------------
-AFRAME.registerComponent("joystick-movement", {
-  schema: { speed: { default: 0.004 } },
-  init: function () {
-    this.moveVector = { x: 0, y: 0 };
-    this.zone = document.getElementById("joystick-zone");
-    this.knob = document.getElementById("joystick-knob");
-    this.active = false;
-    this.maxDist = 40;
-    this.center = { x: 0, y: 0 };
-
-    this.start = this.start.bind(this);
-    this.move = this.move.bind(this);
-    this.end = this.end.bind(this);
-
-    this.zone.addEventListener("touchstart", this.start, { passive: false });
-    this.zone.addEventListener("mousedown", this.start);
-    window.addEventListener("touchmove", this.move, { passive: false });
-    window.addEventListener("mousemove", this.move);
-    window.addEventListener("touchend", this.end);
-    window.addEventListener("touchcancel", this.end);
-    window.addEventListener("mouseup", this.end);
-  },
-  start: function (e) {
-    e.preventDefault();
-    this.active = true;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const rect = this.zone.getBoundingClientRect();
-    this.center.x = rect.left + rect.width / 2;
-    this.center.y = rect.top + rect.height / 2;
-    this.update(cx, cy);
-  },
-  move: function (e) {
-    if (!this.active) return;
-    if (e.touches && e.touches.length > 1) return;
-    e.preventDefault();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    this.update(cx, cy);
-  },
-  end: function () {
-    if (!this.active) return;
-    this.active = false;
-    this.moveVector.x = 0;
-    this.moveVector.y = 0;
-    this.knob.style.transform = "translate(0px, 0px)";
-  },
-  update: function (x, y) {
-    let dx = x - this.center.x;
-    let dy = y - this.center.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > this.maxDist) {
-      const angle = Math.atan2(dy, dx);
-      dx = Math.cos(angle) * this.maxDist;
-      dy = Math.sin(angle) * this.maxDist;
-    }
-    this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    this.moveVector.x = dx / this.maxDist;
-    this.moveVector.y = dy / this.maxDist;
-  },
-  tick: function (_t, dt) {
-    if (!this.active) return;
-    const cam = this.el.object3D;
-    const dir = new THREE.Vector3();
-    cam.getWorldDirection(dir);
-    dir.y = 0;
-    dir.normalize();
-    const right = new THREE.Vector3();
-    right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-    const s = this.data.speed * dt;
-    cam.position.add(dir.multiplyScalar(this.moveVector.y * s));
-    cam.position.add(right.multiplyScalar(-this.moveVector.x * s));
-  },
-});
 async function startImmersive(art) {
   // iOS 13+ requires explicit permission for device orientation
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -2405,20 +2334,17 @@ async function startImmersive(art) {
   bottomNav.classList.add("hidden");
   setBgLayerForScreen(true);
 
-  immersiveContainer.innerHTML = `
+immersiveContainer.innerHTML = `
     <a-scene embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-      <a-entity camera look-controls="touchEnabled: true; mouseEnabled: true; magicWindowTrackingEnabled: true" joystick-movement="speed: 0.004" position="0 1.6 0"></a-entity>
+      <a-entity camera look-controls="touchEnabled: true; mouseEnabled: true; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
-      <a-entity gltf-model="${art.modelObj}" position="0 0 -3" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
+      <a-entity gltf-model="${art.modelObj}" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
       <a-light type="directional" color="#ffffff" intensity="0.4" position="-1 2 1"></a-light>
     </a-scene>
   `;
-  document.getElementById("joystick-zone").classList.remove("hidden");
 }
-
 function exitImmersive() {
-  document.getElementById("joystick-zone").classList.add("hidden");
   immersiveContainer.innerHTML = "";
   setBgLayerForScreen(false);
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);
