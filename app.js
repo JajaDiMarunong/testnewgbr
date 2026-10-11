@@ -1866,6 +1866,7 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
   const isGltf = art.modelObj.match(/\.(glb|gltf)$/i);
   if (isGltf) {
     modelEl.setAttribute("gltf-model", art.modelObj);
+    modelEl.setAttribute("animation-mixer", "clip: *; loop: repeat");
   } else {
     modelEl.setAttribute(
       "obj-model",
@@ -2338,7 +2339,7 @@ immersiveContainer.innerHTML = `
     <a-scene embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-entity camera look-controls="touchEnabled: true; mouseEnabled: true; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
-      <a-entity gltf-model="${art.modelObj}" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
+      <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: *; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
       <a-light type="directional" color="#ffffff" intensity="0.4" position="-1 2 1"></a-light>
     </a-scene>
