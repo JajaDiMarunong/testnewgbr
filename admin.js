@@ -158,6 +158,18 @@ const btnCancelArtworkEdit = document.getElementById("btn-cancel-artwork-edit");
 const btnBuildAr = document.getElementById("btn-build-ar");
 const arBuildStatus = document.getElementById("ar-build-status");
 
+// Marker quality refs
+const markerQualityWrap = document.getElementById("marker-quality-wrap");
+const markerQualityImg = document.getElementById("marker-quality-img");
+const markerQualityCanvas = document.getElementById("marker-quality-canvas");
+const markerQualityResolution = document.getElementById("marker-quality-resolution");
+const markerQualityContrast = document.getElementById("marker-quality-contrast");
+const markerQualityContrastBar = document.getElementById("marker-quality-contrast-bar");
+const markerQualityFeatures = document.getElementById("marker-quality-features");
+const markerQualityRating = document.getElementById("marker-quality-rating");
+const btnTestMarker = document.getElementById("btn-test-marker");
+const markerTestStatus = document.getElementById("marker-test-status");
+
 // Date filter refs — Leaderboard
 const lbDateFilter = document.getElementById("lb-date-filter");
 const lbCustomRange = document.getElementById("lb-custom-range");
@@ -696,12 +708,16 @@ function resetArtworkForm() {
   artworkSkyboxInput.value = "";
   artworkModelScaleInput.value = "0.5";
   artworkModelForwardInput.value = "0.1";
+  artworkImmersiveScaleInput.value = "1";
+  artworkImmersiveRotationInput.value = "0 0 0";
+  artworkImmersiveForwardInput.value = "-3";
   artworkMainInput.checked = true;
   artworkScannableInput.checked = true;
   artworkPublishedInput.checked = true;
   processedImageBase64 = null;
   imagePreview.classList.add("hidden");
   uploadPlaceholder.classList.remove("hidden");
+  markerQualityWrap.classList.add("hidden");
   btnUploadArtwork.textContent = "Upload Artwork";
   btnCancelArtworkEdit.classList.add("hidden");
 }
@@ -725,6 +741,10 @@ function startArtworkSettingsEdit(art) {
     imagePreview.src = art.imageUrl || art.image;
     imagePreview.classList.remove("hidden");
     uploadPlaceholder.classList.add("hidden");
+  }
+  if (art.markerImageUrl) {
+    const file = await fetch(art.markerImageUrl).then(r => r.blob()).then(b => new File([b], "marker.jpg"));
+    await analyzeMarkerQuality(file);
   }
   btnUploadArtwork.textContent = "Save Artwork Settings";
   btnCancelArtworkEdit.classList.remove("hidden");
@@ -801,10 +821,10 @@ async function loadAdminArtworks() {
       .join("");
 
     attachDeleteHandlers();
-    adminArtworksList.querySelectorAll(".artwork-edit-btn").forEach((button) => {
-      button.addEventListener("click", () => {
+adminArtworksList.querySelectorAll(".artwork-edit-btn").forEach((button) => {
+      button.addEventListener("click", async () => {
         const artwork = uploadedArtworksCache.find((item) => item.key === button.dataset.artworkId);
-        if (artwork) startArtworkSettingsEdit({ ...artwork, id: artwork.key });
+        if (artwork) await startArtworkSettingsEdit({ ...artwork, id: artwork.key });
       });
     });
   } catch (err) {
@@ -840,6 +860,34 @@ artworkImageInput.addEventListener("change", async (e) => {
   }
 });
 
+artworkMarkerInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) {
+    markerQualityWrap.classList.add("hidden");
+    return;
+  }
+  await analyzeMarkerQuality(file);
+});
+
+btnTestMarker.addEventListener("click", async () => {
+  const file = artworkMarkerInput.files[0];
+  if (!file) return;
+  markerTestStatus.classList.remove("hidden");
+  markerTestStatus.className = "upload-status";
+  markerTestStatus.textContent = "Testing with MindAR compiler…";
+  btnTestMarker.disabled = true;
+  try {
+    const result = await testMarkerWithCompiler(file);
+    markerTestStatus.className = "upload-status success";
+    markerTestStatus.textContent = `MindAR: ${result.features} feature points, quality ${(result.quality * 100).toFixed(0)}%`;
+  } catch (err) {
+    markerTestStatus.className = "upload-status error";
+    markerTestStatus.textContent = err.message || "MindAR test failed";
+  } finally {
+    btnTestMarker.disabled = false;
+  }
+});
+
 function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -861,6 +909,72 @@ function downscaleImage(img, maxDim) {
   canvas.height = Math.round(img.height * scale);
   canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+async function analyzeMarkerQuality(file) {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  let sum = 0;
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    sum += gray;
+    if (gray < min) min = gray;
+    if (gray > max) max = gray;
+  }
+  const mean = sum / (data.length / 4);
+  const contrast = max - min;
+  const contrastNorm = Math.min(1, contrast / 128);
+
+  const estimatedFeatures = Math.round((canvas.width * canvas.height / 10000) * contrastNorm * 100);
+
+  let rating = "Poor";
+  let ratingClass = "poor";
+  if (contrastNorm > 0.5 && estimatedFeatures > 200) { rating = "Excellent"; ratingClass = "excellent"; }
+  else if (contrastNorm > 0.3 && estimatedFeatures > 100) { rating = "Good"; ratingClass = "good"; }
+  else if (contrastNorm > 0.15 && estimatedFeatures > 50) { rating = "Fair"; ratingClass = "fair"; }
+
+  markerQualityImg.src = URL.createObjectURL(file);
+  markerQualityResolution.textContent = `${img.width} × ${img.height} px`;
+  markerQualityContrast.textContent = `${contrast} (${(contrastNorm * 100).toFixed(0)}%)`;
+  markerQualityContrastBar.querySelector(".quality-bar-fill").style.width = `${contrastNorm * 100}%`;
+  markerQualityFeatures.textContent = `~${estimatedFeatures}`;
+  markerQualityRating.textContent = rating;
+  markerQualityRating.className = `quality-rating ${ratingClass}`;
+
+  markerQualityWrap.classList.remove("hidden");
+}
+
+async function testMarkerWithCompiler(file) {
+  if (!window.MINDAR?.IMAGE?.Compiler) {
+    await loadMindARCompiler();
+  }
+  const img = await loadImageFromFile(file);
+  const canvas = downscaleImage(img, 700);
+  const compiler = new window.MINDAR.IMAGE.Compiler();
+  const compiled = await compiler.compileImageTargets([canvas]);
+  const features = compiled?.targets?.[0]?.keypoints?.length || 0;
+  const quality = Math.min(1, features / 500);
+  return { features, quality };
+}
+
+function loadMindARCompiler() {
+  return new Promise((resolve, reject) => {
+    if (window.MINDAR?.IMAGE?.Compiler) return resolve();
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load MindAR compiler"));
+    document.head.appendChild(script);
+  });
 }
 
 btnUploadArtwork.addEventListener("click", async () => {
@@ -1017,11 +1131,26 @@ async function publishArBundle() {
   if (!targets.length) throw new Error("No published scannable artworks have marker images.");
 
   const images = [];
+  const qualityWarnings = [];
   for (let i = 0; i < targets.length; i++) {
     arBuildStatus.textContent = `Loading marker images: ${i + 1} / ${targets.length}`;
-    images.push(await loadCompilerImage(targets[i].markerImageUrl));
+    const img = await loadCompilerImage(targets[i].markerImageUrl);
+    images.push(img);
+
+    const compiler = new window.MINDAR.IMAGE.Compiler();
+    const compiled = await compiler.compileImageTargets([img]);
+    const features = compiled?.targets?.[0]?.keypoints?.length || 0;
+    if (features < 100) {
+      qualityWarnings.push(`${targets[i].name}: only ${features} feature points (recommended: 200+)`);
+    }
   }
 
+  if (qualityWarnings.length > 0) {
+    arBuildStatus.textContent = `⚠️ Marker quality warnings: ${qualityWarnings.join("; ")}`;
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  arBuildStatus.textContent = "Compiling AR targets…";
   const compiler = new window.MINDAR.IMAGE.Compiler();
   const compiled = await compiler.compileImageTargets(images, (progress) => {
     arBuildStatus.textContent = `Compiling AR targets: ${Math.round(progress)}%`;
@@ -1045,7 +1174,7 @@ async function publishArBundle() {
     body: JSON.stringify({ ...manifest, manifestUrl }),
   });
   if (!response.ok) throw new Error(`Could not publish bundle pointer (${response.status})`);
-  return { version, count: targets.length };
+  return { version, count: targets.length, warnings: qualityWarnings };
 }
 
 btnBuildAr.addEventListener("click", async () => {

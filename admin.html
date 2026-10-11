@@ -118,11 +118,38 @@
             </div>
           </div>
 
-          <div class="form-group">
+<div class="form-group">
             <label>AR Marker Image</label>
             <div class="file-input-row">
               <input type="file" id="artwork-marker" accept="image/*" />
               <span class="upload-hint">Use the artwork as it appears on display</span>
+            </div>
+            <div id="marker-quality-wrap" class="hidden">
+              <div class="marker-quality-preview">
+                <img id="marker-quality-img" src="" alt="Marker preview" />
+                <div id="marker-quality-canvas-wrap" class="hidden"><canvas id="marker-quality-canvas"></canvas></div>
+              </div>
+              <div class="marker-quality-info">
+                <div class="quality-row">
+                  <span class="quality-label">Resolution:</span>
+                  <span id="marker-quality-resolution">—</span>
+                </div>
+                <div class="quality-row">
+                  <span class="quality-label">Contrast Score:</span>
+                  <span id="marker-quality-contrast">—</span>
+                  <span id="marker-quality-contrast-bar" class="quality-bar"><span class="quality-bar-fill"></span></span>
+                </div>
+                <div class="quality-row">
+                  <span class="quality-label">Feature Points (est.):</span>
+                  <span id="marker-quality-features">—</span>
+                </div>
+                <div class="quality-row">
+                  <span class="quality-label">Overall:</span>
+                  <span id="marker-quality-rating" class="quality-rating">—</span>
+                </div>
+                <button id="btn-test-marker" class="btn-secondary btn-small" type="button">Test with MindAR Compiler</button>
+                <span id="marker-test-status" class="upload-status hidden"></span>
+              </div>
             </div>
           </div>
 

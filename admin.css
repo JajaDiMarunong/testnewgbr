@@ -344,3 +344,63 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; l
 
 /* ---------------- Misc ---------------- */
 .hidden { display: none !important; }
+
+/* ---------------- Marker Quality ---------------- */
+.marker-quality-wrap {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(201, 168, 118, 0.2);
+}
+.marker-quality-preview {
+  margin-bottom: 12px;
+  text-align: center;
+}
+.marker-quality-preview img,
+.marker-quality-preview canvas {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 6px;
+  border: 1px solid rgba(244,241,234,0.1);
+  background: #000;
+}
+.quality-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 12.5px;
+}
+.quality-label {
+  width: 140px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.quality-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.quality-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--frame-gold);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.quality-rating {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.quality-rating.excellent { color: var(--success); }
+.quality-rating.good { color: #8ec973; }
+.quality-rating.fair { color: var(--frame-gold); }
+.quality-rating.poor { color: var(--danger); }
+#marker-test-status {
+  display: block;
+  margin-top: 10px;
+  font-size: 11.5px;
+}
