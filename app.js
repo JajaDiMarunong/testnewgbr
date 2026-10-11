@@ -12,46 +12,6 @@ const AR_BUNDLE_CACHE_KEY = "museum_ar_bundle_v1";
 // -------------------------------------------------------------------
 const BUILTIN_ARTWORKS = [
   {
-    id: "builtin-mona",
-    name: "Mona Lisa",
-    image: "./assets/mona-marker.jpg",
-    artist: "Leonardo da Vinci",
-    year: "c. 1503–1506",
-    location: "The Louvre, Paris, France",
-    details:
-      "Painted by Leonardo da Vinci in the early 1500s, this portrait is one of the most " +
-      "recognized paintings in the world, known for its subtle, ambiguous smile and soft " +
-      "transitions of light and shadow. It has hung in the Louvre in Paris since the museum " +
-      "opened to the public.",
-    markerImage: "./assets/mona-marker.jpg",
-    modelObj: "./assets/monalisa-centered.obj",
-    modelMtl: "./assets/monalisa.mtl",
-    baseScale: 0.003,
-    icon: "🖼️",
-    unlocked: false,
-    quizCompleted: false,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    quiz: [
-      {
-        question: "Who painted the Mona Lisa?",
-        options: ["Michelangelo", "Leonardo da Vinci", "Raphael", "Titian"],
-        correctIndex: 1,
-      },
-      {
-        question: "Which museum currently displays the Mona Lisa?",
-        options: ["The British Museum", "The Uffizi Gallery", "The Louvre", "The Prado"],
-        correctIndex: 2,
-      },
-      {
-        question: "The painting is best known for its...",
-        options: ["Bright, bold colors", "Enigmatic smile", "Large size", "Use of gold leaf"],
-        correctIndex: 1,
-      },
-    ],
-  },
-    {
     id: "builtin-crisanto",
     name: "Portrait of Crisanto de los Reyes y Mendoza",
     image: "./assets/crisanto-marker.jpg",

@@ -57,22 +57,6 @@ async function resolveGroqModel() {
 // -------------------------------------------------------------------
 const BUILTIN_ARTWORKS = [
   {
-    id: "builtin-mona",
-    name: "Mona Lisa",
-    image: "./assets/mona-marker.jpg",
-    artist: "Leonardo da Vinci",
-    year: "c. 1503–1506",
-    location: "The Louvre, Paris, France",
-    details: "Painted by Leonardo da Vinci in the early 1500s, this portrait is one of the most recognized paintings in the world, known for its subtle, ambiguous smile and soft transitions of light and shadow. It has hung in the Louvre in Paris since the museum opened to the public.",
-    baseScale: 0.003,
-    icon: "🖼️",
-    hasModel: true,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    markerImage: "./assets/mona-marker.jpg",
-  },
-  {
     id: "builtin-crisanto",
     name: "Portrait of Crisanto de los Reyes y Mendoza",
     image: "./assets/crisanto-marker.jpg",
