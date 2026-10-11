@@ -722,7 +722,7 @@ function resetArtworkForm() {
   btnCancelArtworkEdit.classList.add("hidden");
 }
 
-function startArtworkSettingsEdit(art) {
+async function startArtworkSettingsEdit(art) {
   editingArtworkId = art.id;
   document.getElementById("artwork-name").value = art.name || "";
   document.getElementById("artwork-artist").value = art.artist || "";
