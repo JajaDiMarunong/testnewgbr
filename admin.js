@@ -1115,23 +1115,9 @@ async function publishArBundle() {
   if (!targets.length) throw new Error("No published scannable artworks have marker images.");
 
   const images = [];
-  const qualityWarnings = [];
   for (let i = 0; i < targets.length; i++) {
     arBuildStatus.textContent = `Loading marker images: ${i + 1} / ${targets.length}`;
-    const img = await loadCompilerImage(targets[i].markerImageUrl);
-    images.push(img);
-
-    const compiler = new window.MINDAR.IMAGE.Compiler();
-    const compiled = await compiler.compileImageTargets([img]);
-    const features = compiled?.targets?.[0]?.keypoints?.length || 0;
-    if (features < 100) {
-      qualityWarnings.push(`${targets[i].name}: only ${features} feature points (recommended: 200+)`);
-    }
-  }
-
-  if (qualityWarnings.length > 0) {
-    arBuildStatus.textContent = `⚠️ Marker quality warnings: ${qualityWarnings.join("; ")}`;
-    await new Promise(r => setTimeout(r, 1500));
+    images.push(await loadCompilerImage(targets[i].markerImageUrl));
   }
 
   arBuildStatus.textContent = "Compiling AR targets…";
@@ -1158,7 +1144,7 @@ async function publishArBundle() {
     body: JSON.stringify({ ...manifest, manifestUrl }),
   });
   if (!response.ok) throw new Error(`Could not publish bundle pointer (${response.status})`);
-  return { version, count: targets.length, warnings: qualityWarnings };
+  return { version, count: targets.length };
 }
 
 btnBuildAr.addEventListener("click", async () => {
