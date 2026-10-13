@@ -40,7 +40,8 @@ function validatePath(path: string): { valid: boolean; error?: string; folder?: 
   if (!ALLOWED_FOLDERS.includes(folder)) return { valid: false, error: `Folder must be one of: ${ALLOWED_FOLDERS.join(", ")}` };
   const filename = parts.slice(1).join("/");
   if (filename.length > 200) return { valid: false, error: "Filename too long" };
-  if (!/^[\w\-. ]+$/.test(filename)) return { valid: false, error: "Invalid filename characters" };
+  // Allow alphanumeric, hyphen, underscore, dot, space, and forward slash for subdirectories
+  if (!/^[\w\-. /]+$/.test(filename)) return { valid: false, error: "Invalid filename characters" };
   return { valid: true, folder };
 }
 
