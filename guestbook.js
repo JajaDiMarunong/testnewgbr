@@ -46,11 +46,25 @@ let notesSignature = "";
 let loadInProgress = false;
 
 // -------------------------------------------------------------------
+// Auth initialization
+// -------------------------------------------------------------------
+async function initAuth() {
+  try {
+    await firebase.auth().signInAnonymously();
+    console.log("[Guestbook] Signed in anonymously as:", firebase.auth().currentUser?.uid);
+  } catch (err) {
+    console.warn("[Guestbook] Anonymous sign-in failed:", err);
+  }
+}
+
+// -------------------------------------------------------------------
 // Boot
 // -------------------------------------------------------------------
-loadData();
-startClock();
-startAutoRefresh();
+initAuth().then(() => {
+  loadData();
+  startClock();
+  startAutoRefresh();
+});
 
 // -------------------------------------------------------------------
 // Auto-refresh
@@ -109,9 +123,11 @@ function updateClock() {
 // -------------------------------------------------------------------
 async function loadStats() {
   try {
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
     const [notesRes, lbRes] = await Promise.all([
-      fetch(`${FIREBASE_URL}/notes.json`, { cache: "no-store" }),
-      fetch(`${FIREBASE_URL}/leaderboard.json`, { cache: "no-store" }),
+      fetch(`${FIREBASE_URL}/notes.json${authParam}`, { cache: "no-store" }),
+      fetch(`${FIREBASE_URL}/leaderboard.json${authParam}`, { cache: "no-store" }),
     ]);
     const notesData = await notesRes.json();
     const lbData = await lbRes.json();
@@ -152,7 +168,9 @@ function applyBoardTransform() {
 // -------------------------------------------------------------------
 async function loadNotesBoard() {
   try {
-    const res = await fetch(`${FIREBASE_URL}/notes.json`, { cache: "no-store" });
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/notes.json${authParam}`, { cache: "no-store" });
     const data = await res.json();
     const newNotes = data
       ? Object.entries(data).map(([deviceId, note]) => ({ ...note, deviceId }))
@@ -306,7 +324,9 @@ window.addEventListener("mouseup", () => {
 // -------------------------------------------------------------------
 async function loadLeaderboard() {
   try {
-    const res = await fetch(`${FIREBASE_URL}/leaderboard.json`);
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/leaderboard.json${authParam}`);
     const data = await res.json();
     cachedLeaderboard = data ? Object.entries(data) : [];
     cachedLeaderboard.sort((a, b) => a[1].time - b[1].time);

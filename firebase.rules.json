@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "artworks": {
+      ".read": true,
+      ".write": "auth != null && auth.token.admin === true"
+    },
+    "leaderboard": {
+      ".read": true,
+      ".write": "auth != null && !data.exists() && newData.child('deviceId').val() == auth.uid"
+    },
+    "notes": {
+      ".read": true,
+      "$deviceId": {
+        ".write": "auth != null && (auth.uid === $deviceId || auth.token.admin === true)"
+      }
+    },
+    "presence": {
+      ".read": "auth != null",
+      "$deviceId": {
+        ".write": "auth != null && auth.uid === $deviceId"
+      }
+    },
+    "analytics_visits": {
+      ".write": "auth != null",
+      ".read": "auth != null && auth.token.admin === true"
+    },
+    "arBundleCurrent": {
+      ".read": true,
+      ".write": "auth != null && auth.token.admin === true"
+    }
+  }
+}

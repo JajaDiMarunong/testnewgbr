@@ -100,9 +100,20 @@
     await cacheJson(collection, data);
   }
 
+  async function getAuthToken() {
+    if (typeof firebase !== "undefined" && firebase.auth?.currentUser) {
+      try {
+        return await firebase.auth().currentUser.getIdToken();
+      } catch (_) {}
+    }
+    return null;
+  }
+
   async function enqueue(url, init) {
+    const token = await getAuthToken();
+    const authUrl = token && url.includes("firebasedatabase.app") ? `${url}${url.includes("?") ? "&" : "?"}auth=${token}` : url;
     const entry = {
-      url: new URL(url, location.href).href,
+      url: new URL(authUrl, location.href).href,
       method: (init.method || "POST").toUpperCase(),
       headers: init.headers || {},
       body: init.body || null,
@@ -124,7 +135,12 @@
     const entries = await allQueued();
     for (const entry of entries) {
       try {
-        const response = await nativeFetch(entry.url, { method: entry.method, headers: entry.headers, body: entry.body });
+        const token = await getAuthToken();
+        let url = entry.url;
+        if (token && url.includes("firebasedatabase.app")) {
+          url = `${url}${url.includes("?") ? "&" : "?"}auth=${token}`;
+        }
+        const response = await nativeFetch(url, { method: entry.method, headers: entry.headers, body: entry.body });
         if (!response.ok) break;
         await remove(QUEUE_STORE, entry.id);
       } catch (_) { break; }
@@ -137,7 +153,9 @@
     if (!firebaseUrl(url)) return nativeFetch(input, init);
     if (method === "GET") {
       try {
-        const response = await nativeFetch(input, init);
+        const token = await getAuthToken();
+        const authUrl = token && url.includes("firebasedatabase.app") ? `${url}${url.includes("?") ? "&" : "?"}auth=${token}` : url;
+        const response = await nativeFetch(authUrl, init);
         if (response.ok) cacheJson(url, await response.clone().json()).catch(() => {});
         return response;
       } catch (error) {
@@ -152,7 +170,9 @@
       return new Response(JSON.stringify({ queued: true }), { status: 202, headers: { "Content-Type": "application/json", "X-Museum-Queued": "true" } });
     }
     try {
-      return await nativeFetch(input, init);
+      const token = await getAuthToken();
+      const authUrl = token && url.includes("firebasedatabase.app") ? `${url}${url.includes("?") ? "&" : "?"}auth=${token}` : url;
+      return await nativeFetch(authUrl, init);
     } catch (_) {
       if (isEphemeral(url)) return new Response(null, { status: 202 });
       await enqueue(url, init);

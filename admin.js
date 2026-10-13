@@ -2,55 +2,11 @@
 // ADMIN PANEL — standalone page
 // =====================================================================
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
-const ADMIN_PASSWORD = "GBRMu5281";
-const SUPABASE_URL = "https://twkgioiyfjfkppzerdii.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_UxPFx1rFmy8g8CMaaqtQ1g_LuHnfvry";
-const SUPABASE_BUCKET = "gbr-assets";
-const SUPABASE_PUBLIC_ROOT = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}`;
-const GROQ_API_KEY = "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";
-// Preferred models in order of preference. The app will auto-discover
-// what's actually available from Groq and pick the first match.
-const PREFERRED_MODELS = [
-  "openai/gpt-oss-20b",
-  "openai/gpt-oss-120b",
-  "qwen/qwen3.6-27b",
-  "meta-llama/llama-4-scout-17b-16e-instruct",
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
-let GROQ_MODEL = null; // set dynamically on first use
-
-async function resolveGroqModel() {
-  if (GROQ_MODEL) return GROQ_MODEL;
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/models", {
-      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
-    });
-    if (!res.ok) throw new Error("status " + res.status);
-    const data = await res.json();
-    const available = (data.data || []).map((m) => m.id);
-    // Pick first preferred model that exists
-    for (const pref of PREFERRED_MODELS) {
-      if (available.includes(pref)) {
-        GROQ_MODEL = pref;
-        console.log("[AI] Using model:", GROQ_MODEL);
-        return GROQ_MODEL;
-      }
-    }
-    // Fallback: just use the first chat model available
-    const chatModel = available.find((id) => !id.includes("whisper") && !id.includes("orpheus"));
-    if (chatModel) {
-      GROQ_MODEL = chatModel;
-      console.log("[AI] Fallback model:", GROQ_MODEL);
-      return GROQ_MODEL;
-    }
-    throw new Error("No suitable model found");
-  } catch (err) {
-    console.warn("[AI] Could not discover models, using hard fallback:", err);
-    GROQ_MODEL = PREFERRED_MODELS[0];
-    return GROQ_MODEL;
-  }
-}
+const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
+const ADMIN_AUTH_URL = `${EDGE_FUNCTIONS_BASE}/admin-auth`;
+const FIREBASE_ADMIN_URL = `${EDGE_FUNCTIONS_BASE}/firebase-admin`;
+const UPLOAD_SIGNED_URL = `${EDGE_FUNCTIONS_BASE}/upload-signed-url`;
+const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
 
 // -------------------------------------------------------------------
 // Built-in artworks
@@ -177,19 +133,41 @@ let cachedNotes = [];
 // -------------------------------------------------------------------
 // Login
 // -------------------------------------------------------------------
-btnAdminLoginSubmit.addEventListener("click", () => {
-  if (adminPasswordInput.value === ADMIN_PASSWORD) {
+btnAdminLoginSubmit.addEventListener("click", async () => {
+  const password = adminPasswordInput.value;
+  if (!password) {
+    adminLoginError.classList.remove("hidden");
+    return;
+  }
+  btnAdminLoginSubmit.disabled = true;
+  adminLoginError.classList.add("hidden");
+  try {
+    const res = await fetch(ADMIN_AUTH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Invalid password");
+    }
+    const data = await res.json();
+    await firebase.auth().signInWithCustomToken(data.customToken);
     screenLogin.classList.add("hidden");
     adminDashboard.classList.remove("hidden");
     loadAllData();
-  } else {
+  } catch (err) {
+    adminLoginError.textContent = err.message || "Login failed";
     adminLoginError.classList.remove("hidden");
+  } finally {
+    btnAdminLoginSubmit.disabled = false;
   }
 });
 adminPasswordInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") btnAdminLoginSubmit.click();
 });
 btnLogout.addEventListener("click", () => {
+  firebase.auth().signOut();
   adminDashboard.classList.add("hidden");
   screenLogin.classList.remove("hidden");
   adminPasswordInput.value = "";
@@ -249,20 +227,13 @@ btnAiSubmit.addEventListener("click", async () => {
   btnAiSubmit.disabled = true;
 
   try {
-    console.log("[AI] Sending request to Groq API…");
-    const model = await resolveGroqModel();
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    console.log("[AI] Sending request to Groq proxy…");
+    const res = await fetch(GROQ_PROXY_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: model,
-        messages: [
-          {
-            role: "system",
-            content: `You are a museum cataloging assistant. The user pasted information about an artwork. Extract the following fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description.
+        messages: [{ role: "user", content: query }],
+        systemPrompt: `You are a museum cataloging assistant. The user pasted information about an artwork. Extract the following fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description.
 
 CRITICAL RULES:
 1. Return ONLY the JSON object. No markdown, no explanations, no text before or after.
@@ -272,11 +243,6 @@ CRITICAL RULES:
 
 Example output:
 {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art."}`,
-          },
-          { role: "user", content: query },
-        ],
-        temperature: 0.3,
-        max_tokens: 1200,
       }),
     });
 
@@ -292,7 +258,7 @@ Example output:
     const data = await res.json();
     console.log("[AI] Raw response:", data);
 
-    const raw = data.choices?.[0]?.message?.content?.trim() || "";
+    const raw = data.content || "";
     console.log("[AI] Content text:", raw);
 
     if (!raw) {
@@ -742,29 +708,36 @@ function storagePath(...parts) {
 }
 
 function publicAssetUrl(path) {
-  return `${SUPABASE_PUBLIC_ROOT}/${path}`;
+  return `https://twkgioiyfjfkppzerdii.supabase.co/storage/v1/object/public/gbr-assets/${path}`;
 }
 
 async function uploadSupabaseAsset(file, path) {
-  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath(path)}`, {
+  const cleanPath = storagePath(path);
+  const contentType = file.type || "application/octet-stream";
+
+  // Get signed URL from Edge Function
+  const signedRes = await fetch(UPLOAD_SIGNED_URL, {
     method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": file.type || "application/octet-stream",
-      "x-upsert": "true",
-    },
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: cleanPath, contentType }),
+  });
+  if (!signedRes.ok) {
+    const err = await signedRes.json();
+    throw new Error(err.error || "Failed to get signed URL");
+  }
+  const { signedUrl, publicUrl } = await signedRes.json();
+
+  // Upload directly to Supabase Storage using signed URL
+  const uploadRes = await fetch(signedUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
     body: file,
   });
-  if (!response.ok) {
-    let message = `Supabase upload failed (${response.status})`;
-    try {
-      const error = await response.json();
-      if (error.message) message += `: ${error.message}`;
-    } catch (_) {}
-    throw new Error(message);
+  if (!uploadRes.ok) {
+    throw new Error(`Upload failed (${uploadRes.status})`);
   }
-  return publicAssetUrl(path);
+
+  return publicUrl;
 }
 
 function fileExtension(file, fallback) {
@@ -1138,9 +1111,14 @@ async function publishArBundle() {
   };
   const manifestFile = new File([JSON.stringify(manifest, null, 2)], "manifest.json", { type: "application/json" });
   const manifestUrl = await uploadSupabaseAsset(manifestFile, `bundles/${version}/manifest.json`);
-  const response = await fetch(`${FIREBASE_URL}/arBundleCurrent.json`, {
+
+  // Publish via firebase-admin Edge Function (requires admin auth)
+  const user = firebase.auth().currentUser;
+  if (!user) throw new Error("Not authenticated");
+  const idToken = await user.getIdToken();
+  const response = await fetch(`${FIREBASE_ADMIN_URL}/arBundleCurrent`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
     body: JSON.stringify({ ...manifest, manifestUrl }),
   });
   if (!response.ok) throw new Error(`Could not publish bundle pointer (${response.status})`);
@@ -1176,7 +1154,23 @@ function attachDeleteHandlers() {
       if (!confirm(`Delete ${btn.dataset.label}? This can't be undone.`)) return;
       btn.disabled = true;
       btn.textContent = "…";
-      await fetch(`${FIREBASE_URL}/${btn.dataset.path}.json`, { method: "DELETE" }).catch(() => {});
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      const idToken = await user.getIdToken();
+      const path = btn.dataset.path;
+      let endpoint = "";
+      if (path.startsWith("leaderboard/")) endpoint = "/leaderboard";
+      else if (path.startsWith("notes/")) endpoint = "/notes";
+      else if (path.startsWith("artworks/")) endpoint = `/artworks/${path.split("/")[1]}`;
+      else return;
+      try {
+        await fetch(`${FIREBASE_ADMIN_URL}${endpoint}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        });
+      } catch (err) {
+        console.error("Delete failed:", err);
+      }
       loadAllData();
     });
   });
@@ -1202,12 +1196,24 @@ document.getElementById("btn-export-notes").addEventListener("click", async () =
 });
 document.getElementById("btn-clear-leaderboard").addEventListener("click", async () => {
   if (!confirm("Delete ALL leaderboard entries? This can't be undone.")) return;
-  await fetch(`${FIREBASE_URL}/leaderboard.json`, { method: "DELETE" }).catch(() => {});
+  const user = firebase.auth().currentUser;
+  if (!user) return;
+  const idToken = await user.getIdToken();
+  await fetch(`${FIREBASE_ADMIN_URL}/leaderboard`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+  }).catch(() => {});
   loadAllData();
 });
 document.getElementById("btn-clear-notes").addEventListener("click", async () => {
   if (!confirm("Delete ALL guestbook notes? This can't be undone.")) return;
-  await fetch(`${FIREBASE_URL}/notes.json`, { method: "DELETE" }).catch(() => {});
+  const user = firebase.auth().currentUser;
+  if (!user) return;
+  const idToken = await user.getIdToken();
+  await fetch(`${FIREBASE_ADMIN_URL}/notes`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+  }).catch(() => {});
   loadAllData();
 });
 

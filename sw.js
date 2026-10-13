@@ -3,6 +3,8 @@ importScripts("./asset-manifest.js");
 const CACHE_NAME = "gbr-museum-assets-v2";
 const DATA_CACHE = "gbr-museum-runtime-v2";
 
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://aframe.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co wss://*.firebasedatabase.app; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
@@ -25,23 +27,34 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
+function addSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set('Content-Security-Policy', CSP_HEADER);
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.hostname === "gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app") return;
   event.respondWith((async () => {
     const cached = await caches.match(event.request);
-    if (cached) return cached;
+    if (cached) return addSecurityHeaders(cached);
     try {
       const response = await fetch(event.request);
       if (response && (response.ok || response.type === "opaque")) {
         const cache = await caches.open(DATA_CACHE);
-        cache.put(event.request, response.clone());
+        const securedResponse = addSecurityHeaders(response);
+        cache.put(event.request, securedResponse.clone());
+        return securedResponse;
       }
-      return response;
+      return addSecurityHeaders(response);
     } catch (error) {
       const fallback = await caches.match("./index.html");
-      if (event.request.mode === "navigate" && fallback) return fallback;
+      if (event.request.mode === "navigate" && fallback) return addSecurityHeaders(fallback);
       throw error;
     }
   })());
