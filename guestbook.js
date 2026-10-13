@@ -49,12 +49,29 @@ let loadInProgress = false;
 // Auth initialization
 // -------------------------------------------------------------------
 async function initAuth() {
-  try {
-    await firebase.auth().signInAnonymously();
-    console.log("[Guestbook] Signed in anonymously as:", firebase.auth().currentUser?.uid);
-  } catch (err) {
-    console.warn("[Guestbook] Anonymous sign-in failed:", err);
-  }
+  return new Promise((resolve) => {
+    const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+      unsubscribe();
+      if (user) {
+        console.log("[Guestbook] Auth ready:", user.uid);
+        resolve(user);
+      } else {
+        firebase.auth().signInAnonymously()
+          .then(() => {
+            // Wait for the next auth state change
+            const unsub2 = firebase.auth().onAuthStateChanged((u) => {
+              unsub2();
+              console.log("[Guestbook] Signed in anonymously as:", u?.uid);
+              resolve(u);
+            });
+          })
+          .catch((err) => {
+            console.warn("[Guestbook] Anonymous sign-in failed:", err);
+            resolve(null);
+          });
+      }
+    });
+  });
 }
 
 // -------------------------------------------------------------------
@@ -169,9 +186,18 @@ function applyBoardTransform() {
 async function loadNotesBoard() {
   try {
     const user = firebase.auth().currentUser;
+    console.log("[Guestbook] Current user:", user?.uid);
     const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    console.log("[Guestbook] Fetching notes with auth:", !!authParam);
     const res = await fetch(`${FIREBASE_URL}/notes.json${authParam}`, { cache: "no-store" });
+    console.log("[Guestbook] Notes response:", res.status, res.statusText);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[Guestbook] Notes error:", errText);
+      throw new Error(`status ${res.status}: ${errText}`);
+    }
     const data = await res.json();
+    console.log("[Guestbook] Notes data:", data);
     const newNotes = data
       ? Object.entries(data).map(([deviceId, note]) => ({ ...note, deviceId }))
       : [];
@@ -325,14 +351,23 @@ window.addEventListener("mouseup", () => {
 async function loadLeaderboard() {
   try {
     const user = firebase.auth().currentUser;
+    console.log("[Guestbook] Loading leaderboard, user:", user?.uid);
     const authParam = user ? `?auth=${await user.getIdToken()}` : "";
     const res = await fetch(`${FIREBASE_URL}/leaderboard.json${authParam}`);
+    console.log("[Guestbook] Leaderboard response:", res.status, res.statusText);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[Guestbook] Leaderboard error:", errText);
+      throw new Error(`status ${res.status}: ${errText}`);
+    }
     const data = await res.json();
+    console.log("[Guestbook] Leaderboard data:", data);
     cachedLeaderboard = data ? Object.entries(data) : [];
     cachedLeaderboard.sort((a, b) => a[1].time - b[1].time);
     renderLeaderboardList();
   } catch (err) {
-    leaderboardList.innerHTML = `<p class="tv-leaderboard-status">Couldn't load leaderboard.</p>`;
+    console.error("[Guestbook] loadLeaderboard failed:", err);
+    leaderboardList.innerHTML = `<p class="tv-leaderboard-status">Couldn't load leaderboard: ${err.message}</p>`;
   }
 }
 

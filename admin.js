@@ -715,17 +715,22 @@ async function uploadSupabaseAsset(file, path) {
   const cleanPath = storagePath(path);
   const contentType = file.type || "application/octet-stream";
 
+  console.log("[Admin] Uploading asset:", cleanPath, contentType);
+
   // Get signed URL from Edge Function
   const signedRes = await fetch(UPLOAD_SIGNED_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: cleanPath, contentType }),
   });
+  console.log("[Admin] Signed URL response:", signedRes.status, signedRes.statusText);
   if (!signedRes.ok) {
     const err = await signedRes.json();
+    console.error("[Admin] Signed URL error:", err);
     throw new Error(err.error || "Failed to get signed URL");
   }
   const { signedUrl, publicUrl } = await signedRes.json();
+  console.log("[Admin] Got signed URL and public URL:", publicUrl);
 
   // Upload directly to Supabase Storage using signed URL
   const uploadRes = await fetch(signedUrl, {
@@ -733,8 +738,11 @@ async function uploadSupabaseAsset(file, path) {
     headers: { "Content-Type": contentType },
     body: file,
   });
+  console.log("[Admin] Upload response:", uploadRes.status, uploadRes.statusText);
   if (!uploadRes.ok) {
-    throw new Error(`Upload failed (${uploadRes.status})`);
+    const errText = await uploadRes.text();
+    console.error("[Admin] Upload failed:", errText);
+    throw new Error(`Upload failed (${uploadRes.status}): ${errText}`);
   }
 
   return publicUrl;

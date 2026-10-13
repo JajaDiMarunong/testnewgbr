@@ -977,6 +977,7 @@ async function sendChatMessage() {
   btnChatSend.disabled = true;
 
   try {
+    console.log("[Chat] Sending to:", GROQ_PROXY_URL);
     const res = await fetch(GROQ_PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -986,11 +987,27 @@ async function sendChatMessage() {
       }),
     });
 
+    console.log("[Chat] Response status:", res.status, res.statusText);
+    const responseText = await res.text();
+    console.log("[Chat] Response body:", responseText);
+
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || `status ${res.status}`);
+      let errMsg = `status ${res.status}`;
+      try {
+        const err = JSON.parse(responseText);
+        errMsg = err.error || errMsg;
+      } catch (_) {}
+      throw new Error(errMsg);
     }
-    const data = await res.json();
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error("[Chat] Failed to parse JSON:", responseText);
+      throw new Error("Invalid response from server");
+    }
+
     const reply = data.content || "Sorry, I couldn't come up with an answer for that.";
 
     typingBubble.remove();
@@ -1001,7 +1018,7 @@ async function sendChatMessage() {
   } catch (err) {
     console.error("Kuya Davon chat error:", err);
     typingBubble.remove();
-    addChatBubble("Sorry, I'm having trouble connecting right now. Please try again in a bit.", "bot");
+    addChatBubble(`Sorry, I'm having trouble connecting right now. (${err.message})`, "bot");
   } finally {
     btnChatSend.disabled = false;
   }
