@@ -96,7 +96,7 @@ function corsHeaders() {
 }
 
 export default {
-  fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
+  fetch: withSupabase({ auth: false }, async (req, ctx) => {
     if (req.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }

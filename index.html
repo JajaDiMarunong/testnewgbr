@@ -447,14 +447,28 @@
   <p id="loading-progress-text" class="loading-progress-text">Checking offline files…</p>
 </div>
 
-  <div id="permission-error" class="permission-error hidden">
+<div id="permission-error" class="permission-error hidden">
     <h2>Camera access needed</h2>
     <p>Please allow camera access and reload. This must be opened over HTTPS (or localhost) on your device.</p>
   </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+  <!-- Initialize Firebase -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDqp1MqQhJ0oCVhvjJE9dHQsJQ7qB7aRJ0",
+      authDomain: "gbrmuseumtest.firebaseapp.com",
+      databaseURL: "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "gbrmuseumtest",
+      storageBucket: "gbrmuseumtest.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef123456"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" defer></script>
-  <script src="app.js?v=32" defer></script>
+  <script src="app.js?v=33" defer></script>
 </body>
 </html>
