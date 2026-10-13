@@ -712,7 +712,7 @@ async function startArtworkSettingsEdit(art) {
 // Supabase client for direct uploads (using anon key)
 const SUPABASE_URL = "https://twkgioiyfjfkppzerdii.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_UxPFx1rFmy8g8CMaaqtQ1g_LuHnfvry";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function storagePath(...parts) {
   return parts.flatMap((part) => part.split("/")).map((part) => encodeURIComponent(part)).join("/");
@@ -728,7 +728,7 @@ async function uploadSupabaseAsset(file, path) {
 
   console.log("[Admin] Uploading asset directly via Supabase JS SDK:", cleanPath, contentType);
 
-  const { data, error } = await supabase.storage
+  const { data, error } = await supabaseClient.storage
     .from("gbr-assets")
     .upload(cleanPath, file, {
       contentType,
@@ -741,7 +741,7 @@ async function uploadSupabaseAsset(file, path) {
   }
 
   console.log("[Admin] Upload successful:", data);
-  const { data: publicUrlData } = supabase.storage.from("gbr-assets").getPublicUrl(cleanPath);
+  const { data: publicUrlData } = supabaseClient.storage.from("gbr-assets").getPublicUrl(cleanPath);
   return publicUrlData.publicUrl;
 }
 
