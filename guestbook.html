@@ -71,7 +71,12 @@
     </div>
   </div>
 
-<!-- Initialize Firebase -->
+<!-- Firebase SDK (load first, no defer) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <!-- Initialize Firebase -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",
@@ -86,9 +91,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" defer></script>
-  <script src="guestbook.js?v=4" defer></script>
+  <script src="guestbook.js?v=5" defer></script>
 </body>
 </html>
