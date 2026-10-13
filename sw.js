@@ -28,6 +28,9 @@ self.addEventListener("activate", (event) => {
 });
 
 function addSecurityHeaders(response) {
+  if (!response || response.status === 0) {
+    return response;
+  }
   const headers = new Headers(response.headers);
   headers.set('Content-Security-Policy', CSP_HEADER);
   headers.set('X-Frame-Options', 'DENY');
@@ -51,11 +54,16 @@ self.addEventListener("fetch", (event) => {
         cache.put(event.request, securedResponse.clone());
         return securedResponse;
       }
+      if (!response || response.status === 0) {
+        const fallback = await caches.match("./index.html");
+        if (event.request.mode === "navigate" && fallback) return addSecurityHeaders(fallback);
+        return new Response("", { status: 504, statusText: "Gateway Timeout" });
+      }
       return addSecurityHeaders(response);
     } catch (error) {
       const fallback = await caches.match("./index.html");
       if (event.request.mode === "navigate" && fallback) return addSecurityHeaders(fallback);
-      throw error;
+      return new Response("", { status: 504, statusText: "Gateway Timeout" });
     }
   })());
 });
