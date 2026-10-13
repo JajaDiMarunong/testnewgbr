@@ -1,5 +1,4 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")!;
 const PREFERRED_MODELS = [
@@ -90,18 +89,34 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Content-Type": "application/json",
   };
 }
 
+function handleCors(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+  return null;
+}
+
+function errorResponse(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), { status, headers: corsHeaders() });
+}
+
+function successResponse(data: any): Response {
+  return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders() });
+}
+
 export default {
-  fetch: withSupabase({ auth: false }, async (req, ctx) => {
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  fetch: async (req: Request) => {
+    // Handle CORS preflight
+    const corsResponse = handleCors(req);
+    if (corsResponse) return corsResponse;
+
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
+      return errorResponse("Method not allowed", 405);
     }
 
     const ip = getClientIp(req);
@@ -118,7 +133,7 @@ export default {
       const { messages, systemPrompt, model } = body;
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return new Response(JSON.stringify({ error: "Invalid messages array" }), { status: 400, headers: corsHeaders() });
+        return errorResponse("Invalid messages array", 400);
       }
 
       const sanitizedMessages = messages.slice(-20).map((m: any) => ({
@@ -146,19 +161,16 @@ export default {
       if (!groqRes.ok) {
         const errText = await groqRes.text();
         console.error("[groq-proxy] Groq API error:", groqRes.status, errText);
-        return new Response(JSON.stringify({ error: "AI service unavailable" }), { status: 502, headers: corsHeaders() });
+        return errorResponse("AI service unavailable", 502);
       }
 
       const data = await groqRes.json();
       const reply = data.choices?.[0]?.message?.content?.trim() || "Sorry, I couldn't come up with an answer for that.";
 
-      return new Response(JSON.stringify({ content: reply }), {
-        status: 200,
-        headers: corsHeaders(),
-      });
+      return successResponse({ content: reply });
     } catch (err) {
       console.error("[groq-proxy] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
+      return errorResponse("Internal server error", 500);
     }
-  }),
+  },
 };
