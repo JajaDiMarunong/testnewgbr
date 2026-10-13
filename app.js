@@ -1979,7 +1979,9 @@ async function initArtworks() {
 
   // Fetch uploaded artworks from Firebase
   try {
-    const res = await fetch(`${FIREBASE_URL}/artworks.json`);
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/artworks.json${authParam}`);
     if (res.ok) {
       const data = await res.json();
       if (data) {
@@ -2012,6 +2014,8 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
         }));
         merged = merged.concat(uploaded);
       }
+    } else {
+      console.warn("[initArtworks] Failed to fetch artworks:", res.status, res.statusText);
     }
   } catch (err) {
     console.warn("Could not load uploaded artworks from Firebase:", err);

@@ -325,7 +325,9 @@ async function loadAdminStats() {
 
 async function loadActiveNow() {
   try {
-    const res = await fetch(`${FIREBASE_URL}/presence.json`);
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/presence.json${authParam}`);
     const data = await res.json();
     const entries = data ? Object.values(data) : [];
     const activeCount = entries.filter((p) => Date.now() - p.timestamp < 60000).length;
@@ -337,10 +339,12 @@ async function loadActiveNow() {
 
 async function loadCounts() {
   try {
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
     const [artRes, lbRes, notesRes] = await Promise.all([
-      fetch(`${FIREBASE_URL}/artworks.json`),
-      fetch(`${FIREBASE_URL}/leaderboard.json`),
-      fetch(`${FIREBASE_URL}/notes.json`),
+      fetch(`${FIREBASE_URL}/artworks.json${authParam}`),
+      fetch(`${FIREBASE_URL}/leaderboard.json${authParam}`),
+      fetch(`${FIREBASE_URL}/notes.json${authParam}`),
     ]);
     const artData = await artRes.json();
     const lbData = await lbRes.json();
@@ -360,15 +364,18 @@ async function loadCounts() {
 async function loadVisitData() {
   const DAY = 24 * 60 * 60 * 1000;
   try {
-    const res = await fetch(`${FIREBASE_URL}/analytics_visits.json`);
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`);
     const data = await res.json();
     cachedVisitTimestamps = data ? Object.values(data).map((v) => v.timestamp).filter(Boolean) : [];
 
     const staleCutoff = Date.now() - 35 * DAY;
     const staleEntries = data ? Object.entries(data).filter(([, v]) => v.timestamp < staleCutoff) : [];
-    staleEntries.forEach(([key]) => {
-      fetch(`${FIREBASE_URL}/analytics_visits/${key}.json`, { method: "DELETE" }).catch(() => {});
-    });
+    for (const [key] of staleEntries) {
+      const authParam2 = user ? `?auth=${await user.getIdToken()}` : "";
+      fetch(`${FIREBASE_URL}/analytics_visits/${key}.json${authParam2}`, { method: "DELETE" }).catch(() => {});
+    }
   } catch (err) {
     cachedVisitTimestamps = [];
   }
@@ -756,7 +763,10 @@ function fileExtension(file, fallback) {
 async function loadAdminArtworks() {
   adminArtworksList.innerHTML = `<p class="leaderboard-status">Loading…</p>`;
   try {
-    const res = await fetch(`${FIREBASE_URL}/artworks.json`);
+    const user = firebase.auth().currentUser;
+    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    const res = await fetch(`${FIREBASE_URL}/artworks.json${authParam}`);
+    console.log("[Admin] Artworks response:", res.status, res.statusText);
     const data = await res.json();
     uploadedArtworksCache = data ? Object.entries(data).map(([key, val]) => ({ key, ...val })) : [];
 
