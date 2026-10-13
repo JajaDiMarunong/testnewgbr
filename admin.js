@@ -3,7 +3,6 @@
 // =====================================================================
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
-const ADMIN_AUTH_URL = `${EDGE_FUNCTIONS_BASE}/admin-auth`;
 const FIREBASE_ADMIN_URL = `${EDGE_FUNCTIONS_BASE}/firebase-admin`;
 const UPLOAD_SIGNED_URL = `${EDGE_FUNCTIONS_BASE}/upload-signed-url`;
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
@@ -131,8 +130,11 @@ let cachedLeaderboard = [];
 let cachedNotes = [];
 
 // -------------------------------------------------------------------
-// Login
+// Login - Use Firebase Email/Password Auth (admin@gbrmuseum.test / GBRMu5281)
+// Create this user in Firebase Console → Authentication → Users → Add user
 // -------------------------------------------------------------------
+const ADMIN_EMAIL = "admin@gbrmuseum.test";
+
 btnAdminLoginSubmit.addEventListener("click", async () => {
   const password = adminPasswordInput.value;
   if (!password) {
@@ -141,31 +143,21 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
   }
   btnAdminLoginSubmit.disabled = true;
   adminLoginError.classList.add("hidden");
-  console.log("[Admin] Attempting login to:", ADMIN_AUTH_URL);
+  console.log("[Admin] Signing in with email:", ADMIN_EMAIL);
   try {
-    const res = await fetch(ADMIN_AUTH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    console.log("[Admin] Login response:", res.status, res.statusText);
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[Admin] Login error body:", errText);
-      let errMsg = "Invalid password";
-      try { const err = JSON.parse(errText); errMsg = err.error || errMsg; } catch (_) {}
-      throw new Error(errMsg);
-    }
-    const data = await res.json();
-    console.log("[Admin] Got custom token, signing in...");
-    await firebase.auth().signInWithCustomToken(data.customToken);
+    await firebase.auth().signInWithEmailAndPassword(ADMIN_EMAIL, password);
     console.log("[Admin] Signed in as:", firebase.auth().currentUser?.uid);
     screenLogin.classList.add("hidden");
     adminDashboard.classList.remove("hidden");
     loadAllData();
   } catch (err) {
     console.error("[Admin] Login failed:", err);
-    adminLoginError.textContent = err.message || "Login failed";
+    let msg = "Login failed";
+    if (err.code === "auth/wrong-password") msg = "Incorrect password";
+    else if (err.code === "auth/user-not-found") msg = "Admin user not found. Create in Firebase Console: admin@gbrmuseum.test";
+    else if (err.code === "auth/invalid-email") msg = "Invalid email format";
+    else if (err.message) msg = err.message;
+    adminLoginError.textContent = msg;
     adminLoginError.classList.remove("hidden");
   } finally {
     btnAdminLoginSubmit.disabled = false;
