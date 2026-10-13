@@ -955,13 +955,17 @@ btnUploadArtwork.addEventListener("click", async () => {
       return;
     }
 
-    btnUploadArtwork.disabled = true;
+btnUploadArtwork.disabled = true;
     uploadStatus.textContent = "Saving artwork settings…";
     uploadStatus.className = "upload-status";
     try {
-      const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json`, {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Not authenticated");
+      const idToken = await user.getIdToken();
+
+      const response = await fetch(`${FIREBASE_ADMIN_URL}/artworks/${editingArtworkId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ baseScale, modelPositionZ, immersiveScale, immersiveRotation, immersiveForward }),
       });
       if (!response.ok) throw new Error(`Firebase artwork settings save failed (${response.status})`);
@@ -1036,9 +1040,13 @@ const artwork = {
       createdAt: Date.now(),
     };
 
-    const response = await fetch(`${FIREBASE_URL}/artworks/${artworkId}.json`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error("Not authenticated");
+    const idToken = await user.getIdToken();
+
+    const response = await fetch(`${FIREBASE_ADMIN_URL}/artworks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
       body: JSON.stringify(artwork),
     });
     if (!response.ok) throw new Error(`Firebase artwork save failed (${response.status})`);
