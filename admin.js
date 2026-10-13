@@ -3,7 +3,6 @@
 // =====================================================================
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
-const FIREBASE_ADMIN_URL = `${EDGE_FUNCTIONS_BASE}/firebase-admin`;
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
 
 // -------------------------------------------------------------------
@@ -963,9 +962,9 @@ btnUploadArtwork.disabled = true;
       if (!user) throw new Error("Not authenticated");
       const idToken = await user.getIdToken();
 
-      const response = await fetch(`${FIREBASE_ADMIN_URL}/artworks/${editingArtworkId}`, {
+      const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json?auth=${idToken}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ baseScale, modelPositionZ, immersiveScale, immersiveRotation, immersiveForward }),
       });
       if (!response.ok) throw new Error(`Firebase artwork settings save failed (${response.status})`);
@@ -1044,9 +1043,10 @@ const artwork = {
     if (!user) throw new Error("Not authenticated");
     const idToken = await user.getIdToken();
 
-    const response = await fetch(`${FIREBASE_ADMIN_URL}/artworks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    // Use Firebase REST API directly (supports CORS with auth param)
+    const response = await fetch(`${FIREBASE_URL}/artworks/${artworkId}.json?auth=${idToken}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(artwork),
     });
     if (!response.ok) throw new Error(`Firebase artwork save failed (${response.status})`);
@@ -1128,14 +1128,15 @@ async function publishArBundle() {
   const manifestFile = new File([JSON.stringify(manifest, null, 2)], "manifest.json", { type: "application/json" });
   const manifestUrl = await uploadSupabaseAsset(manifestFile, `bundles/${version}/manifest.json`);
 
-  // Publish via firebase-admin Edge Function (requires admin auth)
+  // Publish via Firebase REST API directly (supports CORS with auth param)
   const user = firebase.auth().currentUser;
   if (!user) throw new Error("Not authenticated");
   const idToken = await user.getIdToken();
-  const response = await fetch(`${FIREBASE_ADMIN_URL}/arBundleCurrent`, {
+  const manifestWithUrl = { ...manifest, manifestUrl };
+  const response = await fetch(`${FIREBASE_URL}/arBundleCurrent.json?auth=${idToken}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-    body: JSON.stringify({ ...manifest, manifestUrl }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(manifestWithUrl),
   });
   if (!response.ok) throw new Error(`Could not publish bundle pointer (${response.status})`);
   return { version, count: targets.length };
@@ -1175,15 +1176,12 @@ function attachDeleteHandlers() {
       const idToken = await user.getIdToken();
       const path = btn.dataset.path;
       let endpoint = "";
-      if (path.startsWith("leaderboard/")) endpoint = "/leaderboard";
-      else if (path.startsWith("notes/")) endpoint = "/notes";
-      else if (path.startsWith("artworks/")) endpoint = `/artworks/${path.split("/")[1]}`;
+      if (path.startsWith("leaderboard/")) endpoint = "/leaderboard.json";
+      else if (path.startsWith("notes/")) endpoint = "/notes.json";
+      else if (path.startsWith("artworks/")) endpoint = `/artworks/${path.split("/")[1]}.json`;
       else return;
       try {
-        await fetch(`${FIREBASE_ADMIN_URL}${endpoint}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-        });
+        await fetch(`${FIREBASE_URL}${endpoint}?auth=${idToken}`, { method: "DELETE" });
       } catch (err) {
         console.error("Delete failed:", err);
       }
@@ -1215,10 +1213,7 @@ document.getElementById("btn-clear-leaderboard").addEventListener("click", async
   const user = firebase.auth().currentUser;
   if (!user) return;
   const idToken = await user.getIdToken();
-  await fetch(`${FIREBASE_ADMIN_URL}/leaderboard`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-  }).catch(() => {});
+  await fetch(`${FIREBASE_URL}/leaderboard.json?auth=${idToken}`, { method: "DELETE" }).catch(() => {});
   loadAllData();
 });
 document.getElementById("btn-clear-notes").addEventListener("click", async () => {
@@ -1226,10 +1221,7 @@ document.getElementById("btn-clear-notes").addEventListener("click", async () =>
   const user = firebase.auth().currentUser;
   if (!user) return;
   const idToken = await user.getIdToken();
-  await fetch(`${FIREBASE_ADMIN_URL}/notes`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-  }).catch(() => {});
+  await fetch(`${FIREBASE_URL}/notes.json?auth=${idToken}`, { method: "DELETE" }).catch(() => {});
   loadAllData();
 });
 
