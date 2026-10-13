@@ -1,5 +1,4 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
 
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const FIREBASE_SERVICE_ACCOUNT = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT")!);
@@ -76,20 +75,34 @@ function corsHeaders() {
   };
 }
 
+function handleCors(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+  return null;
+}
+
+function errorResponse(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), { status, headers: corsHeaders() });
+}
+
+function successResponse(data: any, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: corsHeaders() });
+}
+
 export default {
-  fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  fetch: async (req: Request) => {
+    const corsResponse = handleCors(req);
+    if (corsResponse) return corsResponse;
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: corsHeaders() });
+      return errorResponse("Missing Authorization header", 401);
     }
     const idToken = authHeader.slice(7);
     const auth = await verifyAdminToken(idToken);
     if (!auth || !auth.admin) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), { status: 403, headers: corsHeaders() });
+      return errorResponse("Admin access required", 403);
     }
 
     const url = new URL(req.url);
@@ -104,11 +117,11 @@ export default {
         const body = await req.json();
         const validation = validateArtwork(body);
         if (!validation.valid) {
-          return new Response(JSON.stringify({ error: validation.error }), { status: 400, headers: corsHeaders() });
+          return errorResponse(validation.error, 400);
         }
         const artworkId = `art-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         await adminDb.ref(`artworks/${artworkId}`).set(validation.sanitized);
-        return new Response(JSON.stringify({ id: artworkId, ...validation.sanitized }), { status: 201, headers: corsHeaders() });
+        return successResponse({ id: artworkId, ...validation.sanitized }, 201);
       }
 
       // PATCH /artworks/:id - Update artwork settings (scale, position, etc)
@@ -130,10 +143,10 @@ export default {
           }
         }
         if (Object.keys(updates).length === 0) {
-          return new Response(JSON.stringify({ error: "No valid fields to update" }), { status: 400, headers: corsHeaders() });
+          return errorResponse("No valid fields to update", 400);
         }
         await adminDb.ref(`artworks/${artworkId}`).update(updates);
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
+        return successResponse({ success: true });
       }
 
       // PUT /arBundleCurrent - Publish AR bundle manifest
@@ -142,7 +155,7 @@ export default {
         const required = ["version", "mindUrl", "targets"];
         for (const field of required) {
           if (!body[field]) {
-            return new Response(JSON.stringify({ error: `Missing required field: ${field}` }), { status: 400, headers: corsHeaders() });
+            return errorResponse(`Missing required field: ${field}`, 400);
           }
         }
         const manifest = {
@@ -152,32 +165,32 @@ export default {
           targets: Array.isArray(body.targets) ? body.targets.slice(0, 50).map((t: any) => ({ targetIndex: Number(t.targetIndex), artworkId: String(t.artworkId).slice(0, 50) })) : [],
         };
         await adminDb.ref("arBundleCurrent").set(manifest);
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
+        return successResponse({ success: true });
       }
 
       // DELETE /leaderboard - Clear all leaderboard entries
       if (method === "DELETE" && path === "/leaderboard") {
         await adminDb.ref("leaderboard").remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
+        return successResponse({ success: true });
       }
 
       // DELETE /notes - Clear all notes
       if (method === "DELETE" && path === "/notes") {
         await adminDb.ref("notes").remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
+        return successResponse({ success: true });
       }
 
       // DELETE /artworks/:id - Delete specific artwork
       if (method === "DELETE" && path.startsWith("/artworks/")) {
         const artworkId = path.split("/")[2];
         await adminDb.ref(`artworks/${artworkId}`).remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
+        return successResponse({ success: true });
       }
 
-      return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: corsHeaders() });
+      return errorResponse("Not found", 404);
     } catch (err) {
       console.error("[firebase-admin] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
+      return errorResponse("Internal server error", 500);
     }
-  }),
+  },
 };

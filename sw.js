@@ -3,7 +3,7 @@ importScripts("./asset-manifest.js");
 const CACHE_NAME = "gbr-museum-assets-v2";
 const DATA_CACHE = "gbr-museum-runtime-v2";
 
-const CSP_HEADER = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://aframe.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co wss://*.firebasedatabase.app; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://aframe.io https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co https://www.gstatic.com https://aframe.io https://gbrmuseumtest.firebaseapp.com wss://*.firebasedatabase.app; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {

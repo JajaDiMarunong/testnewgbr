@@ -1,5 +1,4 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
 
 const ADMIN_PASSWORD_HASH = Deno.env.get("ADMIN_PASSWORD_HASH")!;
 const FIREBASE_SERVICE_ACCOUNT = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT")!);
@@ -61,13 +60,28 @@ function corsHeaders() {
   };
 }
 
+function handleCors(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+  return null;
+}
+
+function errorResponse(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), { status, headers: corsHeaders() });
+}
+
+function successResponse(data: any): Response {
+  return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders() });
+}
+
 export default {
-  fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  fetch: async (req: Request) => {
+    const corsResponse = handleCors(req);
+    if (corsResponse) return corsResponse;
+
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
+      return errorResponse("Method not allowed", 405);
     }
 
     const ip = getClientIp(req);
@@ -84,22 +98,22 @@ export default {
       const { password } = body;
 
       if (!password || typeof password !== "string") {
-        return new Response(JSON.stringify({ error: "Password required" }), { status: 400, headers: corsHeaders() });
+        return errorResponse("Password required", 400);
       }
 
       const valid = await verifyPassword(password, ADMIN_PASSWORD_HASH);
       if (!valid) {
-        return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: corsHeaders() });
+        return errorResponse("Invalid password", 401);
       }
 
       await initFirebaseAdmin();
       const uid = `admin-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const customToken = await adminAuth.createCustomToken(uid, { admin: true });
 
-      return new Response(JSON.stringify({ customToken, uid }), { status: 200, headers: corsHeaders() });
+      return successResponse({ customToken, uid });
     } catch (err) {
       console.error("[admin-auth] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
+      return errorResponse("Internal server error", 500);
     }
-  }),
+  },
 };
