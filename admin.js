@@ -4,7 +4,6 @@
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
 const FIREBASE_ADMIN_URL = `${EDGE_FUNCTIONS_BASE}/firebase-admin`;
-const UPLOAD_SIGNED_URL = `${EDGE_FUNCTIONS_BASE}/upload-signed-url`;
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
 
 // -------------------------------------------------------------------
@@ -710,6 +709,11 @@ async function startArtworkSettingsEdit(art) {
   document.getElementById("artwork-model-scale").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// Supabase client for direct uploads (using anon key)
+const SUPABASE_URL = "https://twkgioiyfjfkppzerdii.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_UxPFx1rFmy8g8CMaaqtQ1g_LuHnfvry";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 function storagePath(...parts) {
   return parts.flatMap((part) => part.split("/")).map((part) => encodeURIComponent(part)).join("/");
 }
@@ -722,37 +726,23 @@ async function uploadSupabaseAsset(file, path) {
   const cleanPath = storagePath(path);
   const contentType = file.type || "application/octet-stream";
 
-  console.log("[Admin] Uploading asset:", cleanPath, contentType);
+  console.log("[Admin] Uploading asset directly via Supabase JS SDK:", cleanPath, contentType);
 
-  // Get signed URL from Edge Function
-  const signedRes = await fetch(UPLOAD_SIGNED_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path: cleanPath, contentType }),
-  });
-  console.log("[Admin] Signed URL response:", signedRes.status, signedRes.statusText);
-  if (!signedRes.ok) {
-    const err = await signedRes.json();
-    console.error("[Admin] Signed URL error:", err);
-    throw new Error(err.error || "Failed to get signed URL");
-  }
-  const { signedUrl, publicUrl } = await signedRes.json();
-  console.log("[Admin] Got signed URL and public URL:", publicUrl);
+  const { data, error } = await supabase.storage
+    .from("gbr-assets")
+    .upload(cleanPath, file, {
+      contentType,
+      upsert: true,
+    });
 
-  // Upload directly to Supabase Storage using signed URL
-  const uploadRes = await fetch(signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-  });
-  console.log("[Admin] Upload response:", uploadRes.status, uploadRes.statusText);
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    console.error("[Admin] Upload failed:", errText);
-    throw new Error(`Upload failed (${uploadRes.status}): ${errText}`);
+  if (error) {
+    console.error("[Admin] Upload failed:", error);
+    throw new Error(`Upload failed: ${error.message}`);
   }
 
-  return publicUrl;
+  console.log("[Admin] Upload successful:", data);
+  const { data: publicUrlData } = supabase.storage.from("gbr-assets").getPublicUrl(cleanPath);
+  return publicUrlData.publicUrl;
 }
 
 function fileExtension(file, fallback) {
