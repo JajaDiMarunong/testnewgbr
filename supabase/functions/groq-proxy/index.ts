@@ -86,10 +86,22 @@ ${artworkList}
 Remember: If it is not about one of the artworks above, you do NOT know it. Period.`;
 }
 
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
+}
+
 export default {
   fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
     }
 
     const ip = getClientIp(req);
@@ -97,7 +109,7 @@ export default {
     if (!rateLimit.allowed) {
       return new Response(JSON.stringify({ error: "Rate limited. Try again later." }), {
         status: 429,
-        headers: { "Content-Type": "application/json", "Retry-After": String(rateLimit.retryAfter || 60) },
+        headers: { ...corsHeaders(), "Retry-After": String(rateLimit.retryAfter || 60) },
       });
     }
 
@@ -106,7 +118,7 @@ export default {
       const { messages, systemPrompt, model } = body;
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return new Response(JSON.stringify({ error: "Invalid messages array" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Invalid messages array" }), { status: 400, headers: corsHeaders() });
       }
 
       const sanitizedMessages = messages.slice(-20).map((m: any) => ({
@@ -134,7 +146,7 @@ export default {
       if (!groqRes.ok) {
         const errText = await groqRes.text();
         console.error("[groq-proxy] Groq API error:", groqRes.status, errText);
-        return new Response(JSON.stringify({ error: "AI service unavailable" }), { status: 502, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "AI service unavailable" }), { status: 502, headers: corsHeaders() });
       }
 
       const data = await groqRes.json();
@@ -142,11 +154,11 @@ export default {
 
       return new Response(JSON.stringify({ content: reply }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: corsHeaders(),
       });
     } catch (err) {
       console.error("[groq-proxy] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
     }
   }),
 };

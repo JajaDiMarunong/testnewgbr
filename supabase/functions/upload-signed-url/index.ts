@@ -45,10 +45,22 @@ function validatePath(path: string): { valid: boolean; error?: string; folder?: 
   return { valid: true, folder };
 }
 
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
+}
+
 export default {
   fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
     }
 
     const ip = getClientIp(req);
@@ -56,7 +68,7 @@ export default {
     if (!rateLimit.allowed) {
       return new Response(JSON.stringify({ error: "Upload rate limited. Try again later." }), {
         status: 429,
-        headers: { "Content-Type": "application/json", "Retry-After": String(rateLimit.retryAfter || 60) },
+        headers: { ...corsHeaders(), "Retry-After": String(rateLimit.retryAfter || 60) },
       });
     }
 
@@ -65,18 +77,18 @@ export default {
       const { path, contentType } = body;
 
       if (!path || typeof path !== "string") {
-        return new Response(JSON.stringify({ error: "Path required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Path required" }), { status: 400, headers: corsHeaders() });
       }
       if (!contentType || typeof contentType !== "string") {
-        return new Response(JSON.stringify({ error: "Content-Type required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Content-Type required" }), { status: 400, headers: corsHeaders() });
       }
 
       const pathValidation = validatePath(path);
       if (!pathValidation.valid) {
-        return new Response(JSON.stringify({ error: pathValidation.error }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: pathValidation.error }), { status: 400, headers: corsHeaders() });
       }
       if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-        return new Response(JSON.stringify({ error: "Content-Type not allowed" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Content-Type not allowed" }), { status: 400, headers: corsHeaders() });
       }
 
       const fullPath = `${BUCKET}/${path}`;
@@ -93,7 +105,7 @@ export default {
       if (!signedUrlRes.ok) {
         const err = await signedUrlRes.text();
         console.error("[upload-signed-url] Sign failed:", signedUrlRes.status, err);
-        return new Response(JSON.stringify({ error: "Failed to generate signed URL" }), { status: 500, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Failed to generate signed URL" }), { status: 500, headers: corsHeaders() });
       }
 
       const { signedUrl, token } = await signedUrlRes.json();
@@ -101,11 +113,11 @@ export default {
 
       return new Response(JSON.stringify({ signedUrl: `${SUPABASE_URL}${signedUrl}`, publicUrl, token }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: corsHeaders(),
       });
     } catch (err) {
       console.error("[upload-signed-url] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
     }
   }),
 };

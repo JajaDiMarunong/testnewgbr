@@ -67,16 +67,29 @@ function validateArtwork(data: any): { valid: boolean; error?: string; sanitized
   return { valid: true, sanitized };
 }
 
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Content-Type": "application/json",
+  };
+}
+
 export default {
   fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: corsHeaders() });
     }
     const idToken = authHeader.slice(7);
     const auth = await verifyAdminToken(idToken);
     if (!auth || !auth.admin) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), { status: 403, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Admin access required" }), { status: 403, headers: corsHeaders() });
     }
 
     const url = new URL(req.url);
@@ -91,11 +104,11 @@ export default {
         const body = await req.json();
         const validation = validateArtwork(body);
         if (!validation.valid) {
-          return new Response(JSON.stringify({ error: validation.error }), { status: 400, headers: { "Content-Type": "application/json" } });
+          return new Response(JSON.stringify({ error: validation.error }), { status: 400, headers: corsHeaders() });
         }
         const artworkId = `art-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         await adminDb.ref(`artworks/${artworkId}`).set(validation.sanitized);
-        return new Response(JSON.stringify({ id: artworkId, ...validation.sanitized }), { status: 201, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ id: artworkId, ...validation.sanitized }), { status: 201, headers: corsHeaders() });
       }
 
       // PATCH /artworks/:id - Update artwork settings (scale, position, etc)
@@ -117,10 +130,10 @@ export default {
           }
         }
         if (Object.keys(updates).length === 0) {
-          return new Response(JSON.stringify({ error: "No valid fields to update" }), { status: 400, headers: { "Content-Type": "application/json" } });
+          return new Response(JSON.stringify({ error: "No valid fields to update" }), { status: 400, headers: corsHeaders() });
         }
         await adminDb.ref(`artworks/${artworkId}`).update(updates);
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
       }
 
       // PUT /arBundleCurrent - Publish AR bundle manifest
@@ -129,7 +142,7 @@ export default {
         const required = ["version", "mindUrl", "targets"];
         for (const field of required) {
           if (!body[field]) {
-            return new Response(JSON.stringify({ error: `Missing required field: ${field}` }), { status: 400, headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ error: `Missing required field: ${field}` }), { status: 400, headers: corsHeaders() });
           }
         }
         const manifest = {
@@ -139,32 +152,32 @@ export default {
           targets: Array.isArray(body.targets) ? body.targets.slice(0, 50).map((t: any) => ({ targetIndex: Number(t.targetIndex), artworkId: String(t.artworkId).slice(0, 50) })) : [],
         };
         await adminDb.ref("arBundleCurrent").set(manifest);
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
       }
 
       // DELETE /leaderboard - Clear all leaderboard entries
       if (method === "DELETE" && path === "/leaderboard") {
         await adminDb.ref("leaderboard").remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
       }
 
       // DELETE /notes - Clear all notes
       if (method === "DELETE" && path === "/notes") {
         await adminDb.ref("notes").remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
       }
 
       // DELETE /artworks/:id - Delete specific artwork
       if (method === "DELETE" && path.startsWith("/artworks/")) {
         const artworkId = path.split("/")[2];
         await adminDb.ref(`artworks/${artworkId}`).remove();
-        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders() });
       }
 
-      return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: corsHeaders() });
     } catch (err) {
       console.error("[firebase-admin] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
     }
   }),
 };

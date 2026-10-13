@@ -141,22 +141,30 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
   }
   btnAdminLoginSubmit.disabled = true;
   adminLoginError.classList.add("hidden");
+  console.log("[Admin] Attempting login to:", ADMIN_AUTH_URL);
   try {
     const res = await fetch(ADMIN_AUTH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     });
+    console.log("[Admin] Login response:", res.status, res.statusText);
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Invalid password");
+      const errText = await res.text();
+      console.error("[Admin] Login error body:", errText);
+      let errMsg = "Invalid password";
+      try { const err = JSON.parse(errText); errMsg = err.error || errMsg; } catch (_) {}
+      throw new Error(errMsg);
     }
     const data = await res.json();
+    console.log("[Admin] Got custom token, signing in...");
     await firebase.auth().signInWithCustomToken(data.customToken);
+    console.log("[Admin] Signed in as:", firebase.auth().currentUser?.uid);
     screenLogin.classList.add("hidden");
     adminDashboard.classList.remove("hidden");
     loadAllData();
   } catch (err) {
+    console.error("[Admin] Login failed:", err);
     adminLoginError.textContent = err.message || "Login failed";
     adminLoginError.classList.remove("hidden");
   } finally {

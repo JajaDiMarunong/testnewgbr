@@ -52,10 +52,22 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return derivedHex === hash;
 }
 
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Content-Type": "application/json",
+  };
+}
+
 export default {
   fetch: withSupabase({ auth: ["publishable"] }, async (req, ctx) => {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders() });
     }
 
     const ip = getClientIp(req);
@@ -63,7 +75,7 @@ export default {
     if (!rateLimit.allowed) {
       return new Response(JSON.stringify({ error: "Too many attempts. Try again later." }), {
         status: 429,
-        headers: { "Content-Type": "application/json", "Retry-After": String(rateLimit.retryAfter || 60) },
+        headers: { ...corsHeaders(), "Retry-After": String(rateLimit.retryAfter || 60) },
       });
     }
 
@@ -72,22 +84,22 @@ export default {
       const { password } = body;
 
       if (!password || typeof password !== "string") {
-        return new Response(JSON.stringify({ error: "Password required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Password required" }), { status: 400, headers: corsHeaders() });
       }
 
       const valid = await verifyPassword(password, ADMIN_PASSWORD_HASH);
       if (!valid) {
-        return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: corsHeaders() });
       }
 
       await initFirebaseAdmin();
       const uid = `admin-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const customToken = await adminAuth.createCustomToken(uid, { admin: true });
 
-      return new Response(JSON.stringify({ customToken, uid }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ customToken, uid }), { status: 200, headers: corsHeaders() });
     } catch (err) {
       console.error("[admin-auth] Error:", err);
-      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: corsHeaders() });
     }
   }),
 };
