@@ -2353,10 +2353,15 @@ async function bootMuseum() {
     showHome();
     initTour();
   }
+  requestCameraPermission();
+}
+
+function requestCameraPermission() {
   navigator.mediaDevices?.getUserMedia?.({ video: true })
     .then((stream) => {
       stream.getTracks().forEach((track) => track.stop());
-      return initAR();
+      permissionError.classList.add("hidden");
+      initAR();
     })
     .catch((err) => {
       console.error("Camera/AR init failed:", err);
@@ -2364,5 +2369,7 @@ async function bootMuseum() {
       permissionError.classList.remove("hidden");
     });
 }
+
+document.getElementById("btn-retry-camera")?.addEventListener("click", requestCameraPermission);
 
 bootMuseum();
