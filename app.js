@@ -1927,9 +1927,18 @@ async function initAR() {
   `;
 
   const arScene = document.getElementById("ar-scene");
-  arScene.addEventListener("renderstart", () => {
+  let renderStartFired = false;
+  const hideLoading = () => {
+    if (renderStartFired) return;
+    renderStartFired = true;
     setTimeout(() => loadingScreen.classList.add("hidden"), 300);
+  };
+  arScene.addEventListener("renderstart", hideLoading);
+  arScene.addEventListener("error", (e) => {
+    console.error("MindAR scene error:", e);
+    hideLoading();
   });
+  setTimeout(hideLoading, 15000);
 
   scannable.forEach((art, i) => {
     const targetEl = document.getElementById(`ar-target-${i}`);
