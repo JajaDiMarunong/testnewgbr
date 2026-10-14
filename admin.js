@@ -236,11 +236,28 @@ btnAiSubmit.addEventListener("click", async () => {
 CRITICAL RULES:
 1. Return ONLY the JSON object. No markdown, no explanations, no text before or after.
 2. The description must be 2-3 sentences maximum. Keep it short so the JSON fits in the response.
-3. If a field cannot be determined, use null.
+3. If a field cannot be determined, use null. BUT — infer intelligently:
+   - If no explicit title but the text centers on a specific person/figure/subject, use that subject's name as the title (e.g., "Portrait of [Name]" or just "[Name]")
+   - If the text describes a historical figure, use their name as the title
+   - If the text describes a specific artwork by name, use that name as the title
+   - Extract artist from phrases like "by [Name]", "painted by [Name]", "created by [Name]", "sculpted by [Name]"
+   - Extract year from any 4-digit year mentioned (1800-2025)
+   - Extract location from museum names, cities, countries mentioned
 4. The JSON must be complete and valid — do not cut it off.
+5. Use null ONLY when truly no information exists for that field.
 
-Example output:
-{"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art."}`,
+Examples:
+Input: "The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."
+Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art."}
+
+Input: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal. Undated. Located at GBR Jr. Museum, General Trias, Philippines."
+Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal."}
+
+Input: "This is a painting of Jose Rizal, the Philippine national hero. It was painted by Fabian de la Rosa in 1910. The artwork shows Rizal in a formal pose."
+Output: {"title":"Portrait of Jose Rizal","artist":"Fabian de la Rosa","year":"1910","location":null,"description":"Portrait of Philippine national hero Jose Rizal, painted by Fabian de la Rosa in 1910."}
+
+Input: "A sculpture of Andres Bonifacio by Guillermo Tolentino. Created in 1930. Currently displayed at the University of the Philippines."
+Output: {"title":"Andres Bonifacio","artist":"Guillermo Tolentino","year":"1930","location":"University of the Philippines","description":"Sculpture of Philippine revolutionary Andres Bonifacio by Guillermo Tolentino, created in 1930."}`,
         jsonMode: true,
       }),
     });
