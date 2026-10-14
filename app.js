@@ -30,7 +30,7 @@ const BUILTIN_ARTWORKS = [
       "the Gen. Trias – Amadeo – Tagaytay Road (formerly Governor's Drive) to Crisanto M. De los Reyes.\n\n" +
       "Portrait of Crisanto de los Reyes y Mendoza\nRafael del Casal\nOil on canvas\nUndated",
     markerImage: "./assets/crisanto-marker.jpg",
-    modelObj: "./assets/crisanto.optimized.glb",
+    modelObj: "./assets/crisanto.glb",
     modelMtl: null,
     baseScale: 0.5,
     icon: "🎨",
