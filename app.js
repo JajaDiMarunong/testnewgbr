@@ -1885,6 +1885,7 @@ function checkCollectionComplete() {
 // Build AR scene
 // -------------------------------------------------------------------
 async function initAR() {
+  console.log("[initAR] Starting AR initialization");
   const bundledTargetIds = new Set(BUILTIN_ARTWORKS.filter((a) => a.markerImage).map((a) => a.id));
   let scannable = artworks.filter((a) => bundledTargetIds.has(a.id));
   let imageTargetSrc = "./assets/targets.mind";
@@ -1904,8 +1905,16 @@ async function initAR() {
     console.warn("Could not load published AR bundle:", error);
   }
 
-  const targetResponse = await fetch(imageTargetSrc).catch(() => null);
-  if (!targetResponse?.ok) throw new Error("No usable AR target bundle is available.");
+  console.log("[initAR] Fetching target bundle:", imageTargetSrc);
+  const targetResponse = await fetch(imageTargetSrc).catch((err) => {
+    console.error("[initAR] Target fetch failed:", err);
+    return null;
+  });
+  if (!targetResponse?.ok) {
+    console.error("[initAR] No usable AR target bundle, response:", targetResponse);
+    throw new Error("No usable AR target bundle is available.");
+  }
+  console.log("[initAR] Target bundle fetched successfully");
 
   const targetEntities = scannable
     .map((art, i) => `<a-entity id="ar-target-${i}" mindar-image-target="targetIndex: ${i}"></a-entity>`)
@@ -1927,24 +1936,42 @@ async function initAR() {
   `;
 
   const arScene = document.getElementById("ar-scene");
+  if (!arScene) {
+    console.error("[initAR] ar-scene element not found after innerHTML");
+    loadingScreen.classList.add("hidden");
+    return;
+  }
+  console.log("[initAR] ar-scene element found, attaching listeners");
+
   let renderStartFired = false;
   const hideLoading = () => {
     if (renderStartFired) return;
     renderStartFired = true;
+    console.log("[initAR] Hiding loading screen");
     setTimeout(() => loadingScreen.classList.add("hidden"), 300);
   };
   arScene.addEventListener("renderstart", hideLoading);
   arScene.addEventListener("error", (e) => {
-    console.error("MindAR scene error:", e);
+    console.error("[initAR] MindAR scene error:", e);
     hideLoading();
   });
-  setTimeout(hideLoading, 15000);
+  // Also listen on window for any unhandled errors during MindAR init
+  const errorHandler = (e) => {
+    console.error("[initAR] Window error during AR init:", e);
+    hideLoading();
+  };
+  window.addEventListener("error", errorHandler);
+  setTimeout(() => {
+    window.removeEventListener("error", errorHandler);
+    hideLoading();
+  }, 15000);
 
   scannable.forEach((art, i) => {
     const targetEl = document.getElementById(`ar-target-${i}`);
-    targetEl.addEventListener("targetFound", () => handleTargetFound(art, i, targetEl));
-    targetEl.addEventListener("targetLost", handleTargetLost);
+    targetEl?.addEventListener("targetFound", () => handleTargetFound(art, i, targetEl));
+    targetEl?.addEventListener("targetLost", handleTargetLost);
   });
+  console.log("[initAR] AR initialization complete, waiting for renderstart...");
 }
 
 async function loadPublishedArBundle() {
@@ -2333,36 +2360,44 @@ function exitImmersive() {
 // BOOT
 // =====================================================================
 async function bootMuseum() {
-  if (window.MuseumOffline) {
-    loadingText.textContent = "Downloading museum for offline use…";
-    await window.MuseumOffline.preloadAssets(({ completed, total, failed }) => {
-      const percent = total ? Math.round((completed / total) * 100) : 0;
-      loadingProgressFill.style.width = `${percent}%`;
-      loadingProgressFill.parentElement.setAttribute("aria-valuenow", String(percent));
-      loadingProgressText.textContent = failed
-        ? `${completed} / ${total} files ready (${failed} will retry later)`
-        : `${completed} / ${total} files ready`;
-    });
-  }
-
-  // Initialize Firebase Auth (anonymous)
   try {
-    await firebase.auth().signInAnonymously();
-    console.log("[Auth] Signed in anonymously as:", firebase.auth().currentUser?.uid);
-  } catch (err) {
-    console.warn("[Auth] Anonymous sign-in failed:", err);
-  }
+    if (window.MuseumOffline) {
+      loadingText.textContent = "Downloading museum for offline use…";
+      await window.MuseumOffline.preloadAssets(({ completed, total, failed }) => {
+        const percent = total ? Math.round((completed / total) * 100) : 0;
+        loadingProgressFill.style.width = `${percent}%`;
+        loadingProgressFill.parentElement.setAttribute("aria-valuenow", String(percent));
+        loadingProgressText.textContent = failed
+          ? `${completed} / ${total} files ready (${failed} will retry later)`
+          : `${completed} / ${total} files ready`;
+      });
+    }
 
-  await initArtworks();
-  restoreProgress();
-  checkAllUnlockedBadge();
-  checkAllQuizzesBadge();
-  if (currentUsername) {
-    screenUsername.classList.add("hidden");
-    showHome();
-    initTour();
+    // Initialize Firebase Auth (anonymous)
+    try {
+      await firebase.auth().signInAnonymously();
+      console.log("[Auth] Signed in anonymously as:", firebase.auth().currentUser?.uid);
+    } catch (err) {
+      console.warn("[Auth] Anonymous sign-in failed:", err);
+    }
+
+    await initArtworks();
+    restoreProgress();
+    checkAllUnlockedBadge();
+    checkAllQuizzesBadge();
+    if (currentUsername) {
+      screenUsername.classList.add("hidden");
+      showHome();
+      initTour();
+    }
+    requestCameraPermission();
+  } catch (err) {
+    console.error("[bootMuseum] Fatal error:", err);
+    loadingScreen.classList.add("hidden");
+    permissionError.classList.remove("hidden");
+    permissionError.querySelector("h2").textContent = "Failed to start";
+    permissionError.querySelector("p").textContent = err.message || "Unknown error";
   }
-  requestCameraPermission();
 }
 
 function requestCameraPermission() {
@@ -2370,7 +2405,13 @@ function requestCameraPermission() {
     .then((stream) => {
       stream.getTracks().forEach((track) => track.stop());
       permissionError.classList.add("hidden");
-      initAR();
+      try {
+        initAR();
+      } catch (err) {
+        console.error("[requestCameraPermission] initAR threw synchronously:", err);
+        loadingScreen.classList.add("hidden");
+        permissionError.classList.remove("hidden");
+      }
     })
     .catch((err) => {
       console.error("Camera/AR init failed:", err);
