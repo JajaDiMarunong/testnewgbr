@@ -241,6 +241,7 @@ CRITICAL RULES:
 
 Example output:
 {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art."}`,
+        jsonMode: true,
       }),
     });
 

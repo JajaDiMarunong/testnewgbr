@@ -10,6 +10,14 @@ const PREFERRED_MODELS = [
   "llama-3.1-8b-instant",
 ];
 
+const JSON_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+];
+
 let cachedModel: string | null = null;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -33,8 +41,11 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   return { allowed: true };
 }
 
-async function resolveGroqModel(): Promise<string> {
-  if (cachedModel) return cachedModel;
+async function resolveGroqModel(forceJsonMode = false): Promise<string> {
+  const cacheKey = forceJsonMode ? "jsonModel" : "chatModel";
+  const cached = forceJsonMode ? cachedJsonModel : cachedModel;
+  if (cached) return cached;
+
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
@@ -42,24 +53,31 @@ async function resolveGroqModel(): Promise<string> {
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
     const available = (data.data || []).map((m: any) => m.id);
-    for (const pref of PREFERRED_MODELS) {
+    const prefs = forceJsonMode ? JSON_MODELS : PREFERRED_MODELS;
+    for (const pref of prefs) {
       if (available.includes(pref)) {
-        cachedModel = pref;
-        return cachedModel;
+        if (forceJsonMode) cachedJsonModel = pref;
+        else cachedModel = pref;
+        return pref;
       }
     }
     const chatModel = available.find((id: string) => !id.includes("whisper") && !id.includes("orpheus"));
     if (chatModel) {
-      cachedModel = chatModel;
-      return cachedModel;
+      if (forceJsonMode) cachedJsonModel = chatModel;
+      else cachedModel = chatModel;
+      return chatModel;
     }
     throw new Error("No suitable model found");
   } catch (err) {
     console.warn("[groq-proxy] Model discovery failed, using fallback:", err);
-    cachedModel = PREFERRED_MODELS[0];
-    return cachedModel;
+    const fallback = forceJsonMode ? JSON_MODELS[0] : PREFERRED_MODELS[0];
+    if (forceJsonMode) cachedJsonModel = fallback;
+    else cachedModel = fallback;
+    return fallback;
   }
 }
+
+let cachedJsonModel: string | null = null;
 
 function sanitizeInput(str: string, maxLen: number): string {
   return str.slice(0, maxLen).replace(/[<>]/g, "");
@@ -130,7 +148,7 @@ export default {
 
     try {
       const body = await req.json();
-      const { messages, systemPrompt, model } = body;
+      const { messages, systemPrompt, model, jsonMode } = body;
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return errorResponse("Invalid messages array", 400);
@@ -141,8 +159,12 @@ export default {
         content: sanitizeInput(String(m.content || ""), 300),
       }));
 
-      const resolvedModel = model || (await resolveGroqModel());
+      const isJsonMode = jsonMode || (systemPrompt && systemPrompt.includes("JSON"));
+      const resolvedModel = model || (await resolveGroqModel(isJsonMode));
       const systemContent = systemPrompt || "You are a helpful assistant.";
+
+      const temperature = isJsonMode ? 0.1 : 0.4;
+      const maxTokens = isJsonMode ? 800 : 300;
 
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -153,8 +175,8 @@ export default {
         body: JSON.stringify({
           model: resolvedModel,
           messages: [{ role: "system", content: systemContent }, ...sanitizedMessages],
-          temperature: 0.4,
-          max_tokens: 300,
+          temperature,
+          max_tokens: maxTokens,
         }),
       });
 
