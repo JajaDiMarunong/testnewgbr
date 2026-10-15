@@ -584,6 +584,10 @@ function animateScreenIn(screenEl, animationClass) {
 }
 
 function hideAllScreens() {
+  const wasScannerVisible = !screenScanner.classList.contains("hidden");
+  if (wasScannerVisible) {
+    stopAR();
+  }
   screenHome.classList.add("hidden");
   screenScanner.classList.add("hidden");
   screenDetail.classList.add("hidden");
@@ -615,6 +619,7 @@ function showScanner() {
   scanHint.textContent = "Point your camera at an artwork";
   scanHint.classList.remove("found");
   lastActiveNavTab = "scanner";
+  startAR();
 }
 
 function showBadges() {
@@ -1740,6 +1745,13 @@ let currentScale = 0.06;
 let currentRotY = 0;
 let currentRotX = 0;
 
+// -------------------------------------------------------------------
+// AR Lifecycle Management
+// -------------------------------------------------------------------
+let arScene = null;
+let arInitialized = false;
+let arScannable = [];
+
 function applyTransform() {
   if (!activeModelEl) return;
   activeModelEl.setAttribute("scale", `${currentScale} ${currentScale} ${currentScale}`);
@@ -1803,6 +1815,40 @@ window.addEventListener(
 );
 
 // -------------------------------------------------------------------
+// Three.js Resource Disposal
+// -------------------------------------------------------------------
+function disposeModel(modelEl) {
+  if (!modelEl) return;
+  const mesh = modelEl.getObject3D("mesh");
+  if (mesh) {
+    mesh.traverse((obj) => {
+      if (obj.geometry) {
+        obj.geometry.dispose();
+      }
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m) => disposeMaterial(m));
+        } else {
+          disposeMaterial(obj.material);
+        }
+      }
+    });
+  }
+}
+
+function disposeMaterial(material) {
+  if (material.map) material.map.dispose();
+  if (material.lightMap) material.lightMap.dispose();
+  if (material.aoMap) material.aoMap.dispose();
+  if (material.normalMap) material.normalMap.dispose();
+  if (material.emissiveMap) material.emissiveMap.dispose();
+  if (material.envMap) material.envMap.dispose();
+  if (material.specularMap) material.specularMap.dispose();
+  if (material.alphaMap) material.alphaMap.dispose();
+  material.dispose();
+}
+
+// -------------------------------------------------------------------
 // Target found / lost
 // -------------------------------------------------------------------
 function getOrCreateModelEntity(art, targetIndex, targetEl) {
@@ -1863,10 +1909,19 @@ function handleTargetFound(art, targetIndex, targetEl) {
   if (!wasAlreadyUnlocked) celebrateFirstUnlock();
 }
 
-function handleTargetLost() {
+function handleTargetLost(targetIndex) {
   scanHint.textContent = "Point your camera at an artwork";
   scanHint.classList.remove("found");
-  activeModelEl = null;
+
+  const modelEl = document.getElementById(`model-${targetIndex}`);
+  if (modelEl) {
+    disposeModel(modelEl);
+    modelEl.remove();
+  }
+
+  if (activeModelEl && activeModelEl.id === `model-${targetIndex}`) {
+    activeModelEl = null;
+  }
 }
 
 function checkCollectionComplete() {
@@ -1935,12 +1990,15 @@ async function initAR() {
     </a-scene>
   `;
 
-  const arScene = document.getElementById("ar-scene");
-  if (!arScene) {
+  const arSceneEl = document.getElementById("ar-scene");
+  if (!arSceneEl) {
     console.error("[initAR] ar-scene element not found after innerHTML");
     loadingScreen.classList.add("hidden");
     return;
   }
+  arScene = arSceneEl;
+  arScannable = scannable;
+  arInitialized = true;
   console.log("[initAR] ar-scene element found, attaching listeners");
 
   let renderStartFired = false;
@@ -1969,9 +2027,50 @@ async function initAR() {
   scannable.forEach((art, i) => {
     const targetEl = document.getElementById(`ar-target-${i}`);
     targetEl?.addEventListener("targetFound", () => handleTargetFound(art, i, targetEl));
-    targetEl?.addEventListener("targetLost", handleTargetLost);
+    targetEl?.addEventListener("targetLost", () => handleTargetLost(i));
   });
-  console.log("[initAR] AR initialization complete, waiting for renderstart...");
+console.log("[initAR] AR initialization complete, waiting for renderstart...");
+}
+
+// -------------------------------------------------------------------
+// AR Lifecycle: start/stop
+// -------------------------------------------------------------------
+async function startAR() {
+  if (arInitialized && arScene) {
+    console.log("[startAR] AR already initialized, resuming");
+    return;
+  }
+  console.log("[startAR] Starting AR...");
+  loadingScreen.classList.remove("hidden");
+  loadingText.textContent = "Starting AR camera…";
+  await initAR();
+}
+
+function stopAR() {
+  if (!arScene) {
+    console.log("[stopAR] No AR scene to stop");
+    return;
+  }
+  console.log("[stopAR] Stopping AR, cleaning up...");
+
+  arScannable.forEach((_, i) => {
+    const modelEl = document.getElementById(`model-${i}`);
+    if (modelEl) {
+      disposeModel(modelEl);
+      modelEl.remove();
+    }
+  });
+
+  if (arScene.destroy) {
+    arScene.destroy();
+  }
+
+  arContainer.innerHTML = "";
+  arScene = null;
+  arScannable = [];
+  arInitialized = false;
+  activeModelEl = null;
+  console.log("[stopAR] AR stopped and cleaned up");
 }
 
 async function loadPublishedArBundle() {
@@ -2351,6 +2450,14 @@ immersiveContainer.innerHTML = `
   `;
 }
 function exitImmersive() {
+  const immersiveScene = immersiveContainer.querySelector("a-scene");
+  if (immersiveScene) {
+    const modelEntities = immersiveScene.querySelectorAll('[gltf-model]');
+    modelEntities.forEach((el) => disposeModel(el));
+    if (immersiveScene.destroy) {
+      immersiveScene.destroy();
+    }
+  }
   immersiveContainer.innerHTML = "";
   setBgLayerForScreen(false);
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);
@@ -2405,16 +2512,10 @@ function requestCameraPermission() {
     .then((stream) => {
       stream.getTracks().forEach((track) => track.stop());
       permissionError.classList.add("hidden");
-      try {
-        initAR();
-      } catch (err) {
-        console.error("[requestCameraPermission] initAR threw synchronously:", err);
-        loadingScreen.classList.add("hidden");
-        permissionError.classList.remove("hidden");
-      }
+      loadingScreen.classList.add("hidden");
     })
     .catch((err) => {
-      console.error("Camera/AR init failed:", err);
+      console.error("Camera permission denied:", err);
       loadingScreen.classList.add("hidden");
       permissionError.classList.remove("hidden");
     });
