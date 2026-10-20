@@ -1978,7 +1978,7 @@ async function initAR() {
   arContainer.innerHTML = `
     <a-scene
       id="ar-scene"
-      mindar-image="imageTargetSrc: ${imageTargetSrc}; maxTrack: ${scannable.length}; filterMinCF: 0.001; filterBeta: 200; missTolerance: 8; warmupTolerance: 5; uiLoading: no; uiScanning: no; uiError: no;"
+      mindar-image="imageTargetSrc: ${imageTargetSrc}; maxTrack: ${scannable.length}; filterMinCF: 0.001; filterBeta: 1000; missTolerance: 20; warmupTolerance: 2; uiLoading: no; uiScanning: no; uiError: no;"
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: false"

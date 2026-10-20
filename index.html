@@ -21,6 +21,20 @@
 
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js"></script>
+<script>
+  (() => {
+    const nativeAtob = window.atob.bind(window);
+    const detectionWorkerMarker = "matchDetection";
+    const strictDetection = "$t=3,Lt=6,Ke=8,Ot=.7";
+    const relaxedDetection = "$t=4,Lt=4,Ke=8,Ot=.8";
+    window.atob = (encoded) => {
+      const decoded = nativeAtob(encoded);
+      return decoded.includes(detectionWorkerMarker) && decoded.includes(strictDetection)
+        ? decoded.replace(strictDetection, relaxedDetection)
+        : decoded;
+    };
+  })();
+</script>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
 <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js" defer></script>
@@ -472,6 +486,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=34" defer></script>
+  <script src="app.js?v=35" defer></script>
 </body>
 </html>
