@@ -63,6 +63,10 @@ const visitsChartTotal = document.getElementById("visits-chart-total");
 
 const adminLeaderboardList = document.getElementById("admin-leaderboard-list");
 const adminNotesList = document.getElementById("admin-notes-list");
+const adminNoteViewModal = document.getElementById("admin-note-view-modal");
+const adminNoteViewContent = document.getElementById("admin-note-view-content");
+const adminNoteViewName = document.getElementById("admin-note-view-name");
+const btnAdminNoteViewClose = document.getElementById("btn-admin-note-view-close");
 const adminArtworksList = document.getElementById("admin-artworks-list");
 
 // AI Modal refs
@@ -332,6 +336,7 @@ Output: {"title":"Andres Bonifacio","artist":"Guillermo Tolentino","year":"1930"
 // STATS
 // =====================================================================
 let cachedVisitTimestamps = [];
+let visitDataError = false;
 let currentVisitsRange = "week";
 
 async function loadAdminStats() {
@@ -379,10 +384,12 @@ async function loadCounts() {
 
 async function loadVisitData() {
   const DAY = 24 * 60 * 60 * 1000;
+  visitDataError = false;
   try {
     const user = firebase.auth().currentUser;
     const authParam = user ? `?auth=${await user.getIdToken()}` : "";
     const res = await fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`);
+    if (!res.ok) throw new Error(`analytics_visits: ${res.status} ${await res.text()}`);
     const data = await res.json();
     cachedVisitTimestamps = data ? Object.values(data).map((v) => v.timestamp).filter(Boolean) : [];
 
@@ -394,6 +401,8 @@ async function loadVisitData() {
     }
   } catch (err) {
     cachedVisitTimestamps = [];
+    visitDataError = true;
+    console.error("[Admin] Could not load analytics:", err);
   }
 }
 
@@ -408,6 +417,12 @@ function renderVisitsChart(range) {
   const DAY = 24 * 60 * 60 * 1000;
   const timestamps = cachedVisitTimestamps;
   let bars = [];
+
+  if (visitDataError) {
+    visitsChart.innerHTML = `<p class="leaderboard-status">Couldn't load analytics data. Check the database rules and admin login.</p>`;
+    visitsChartTotal.textContent = "";
+    return;
+  }
 
   if (range === "week" || range === "lastweek") {
     const thisWeekStart = getWeekStart(new Date());
@@ -613,6 +628,70 @@ async function loadAdminNotes() {
   }
 }
 
+function escapeAttr(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function safeNoteColor(color) {
+  return /^#[0-9a-f]{3,8}$/i.test(color || "") ? color : "#f4d35e";
+}
+
+function noteTypeLabel(type) {
+  if (type === "draw") return "Drawing";
+  if (type === "photo") return "Photo";
+  return "Text";
+}
+
+function notePreviewMarkup(note) {
+  const type = note.type || "text";
+  if (type === "photo" || type === "draw") {
+    const src = type === "photo" ? note.photo : note.drawing;
+    return src
+      ? `<img src="${escapeAttr(src)}" alt="${noteTypeLabel(type)} note" loading="lazy" />`
+      : `<div class="admin-note-preview-text">${noteTypeLabel(type)} note</div>`;
+  }
+  return `<div class="admin-note-preview-text">${escapeHtml(note.text || "")}</div>`;
+}
+
+function openAdminNoteView(note) {
+  const type = note.type || "text";
+  adminNoteViewContent.style.background = type === "photo" ? "#f7f4ec" : safeNoteColor(note.color);
+  if (type === "photo" || type === "draw") {
+    const src = type === "photo" ? note.photo : note.drawing;
+    adminNoteViewContent.innerHTML = src
+      ? `<img src="${escapeAttr(src)}" alt="${noteTypeLabel(type)} note" />`
+      : `<p>No ${type} data saved for this note.</p>`;
+  } else {
+    adminNoteViewContent.innerHTML = `<p>${escapeHtml(note.text || "")}</p>`;
+  }
+  const dateStr = formatDateFull(note.timestamp);
+  adminNoteViewName.textContent = `${noteTypeLabel(type)} · ${note.name || "Anonymous"}${dateStr ? " · " + dateStr : ""}`;
+  adminNoteViewModal.classList.remove("hidden");
+}
+
+function attachNoteViewHandlers() {
+  adminNotesList.querySelectorAll("[data-note-view]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const entry = cachedNotes.find(([key]) => key === el.dataset.noteView);
+      if (entry) openAdminNoteView(entry[1]);
+    });
+  });
+}
+
+btnAdminNoteViewClose.addEventListener("click", () => adminNoteViewModal.classList.add("hidden"));
+adminNoteViewModal.addEventListener("click", (event) => {
+  if (event.target === adminNoteViewModal) adminNoteViewModal.classList.add("hidden");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !adminNoteViewModal.classList.contains("hidden")) {
+    adminNoteViewModal.classList.add("hidden");
+  }
+});
+
 function renderNotesList() {
   const filterValue = notesDateFilter.value;
   const customFrom = notesDateFrom.value;
@@ -629,23 +708,35 @@ function renderNotesList() {
     return;
   }
 
-  const typeIcon = { text: "📝", draw: "🎨", photo: "📷" };
-
   adminNotesList.innerHTML = filtered
-    .map(
-      ([key, n]) => `
-    <div class="admin-row">
+    .map(([key, note]) => {
+      const type = note.type || "text";
+      const isPhoto = type === "photo";
+      const color = safeNoteColor(note.color);
+      const previewStyle = isPhoto ? "" : ` style="background:${escapeAttr(color)}"`;
+      const summary = type === "text" && note.text
+        ? escapeHtml(note.text.slice(0, 120))
+        : `${noteTypeLabel(type)} note`;
+      return `
+    <div class="admin-row admin-note-row">
+      <button type="button" class="admin-note-preview${isPhoto ? " type-photo" : ""}"${previewStyle} data-note-view="${escapeAttr(key)}" aria-label="View ${noteTypeLabel(type).toLowerCase()} note">
+        ${notePreviewMarkup(note)}
+      </button>
       <div class="admin-row-info">
-        <div class="admin-row-name">${typeIcon[n.type] || "📝"} ${escapeHtml(n.name || "Anonymous")}</div>
-        <div class="admin-row-meta">${!n.type || n.type === "text" ? escapeHtml((n.text || "").slice(0, 40)) : `(${n.type})`}</div>
-        <div class="admin-row-date">${formatDateFull(n.timestamp)}</div>
+        <div class="admin-row-name">${escapeHtml(note.name || "Anonymous")}</div>
+        <div class="admin-row-meta">${summary}</div>
+        <div class="admin-row-date">${formatDateFull(note.timestamp)}</div>
       </div>
-      <button class="admin-delete-btn" data-path="notes/${key}" data-label="this note">Delete</button>
-    </div>`
-    )
+      <div class="admin-row-actions">
+        <button type="button" class="btn-tiny admin-note-view-btn" data-note-view="${escapeAttr(key)}">View</button>
+        <button class="admin-delete-btn" data-path="notes/${escapeAttr(key)}" data-label="this note">Delete</button>
+      </div>
+    </div>`;
+    })
     .join("");
 
   attachDeleteHandlers();
+  attachNoteViewHandlers();
 }
 
 // Notes date filter events
@@ -1188,22 +1279,29 @@ function attachDeleteHandlers() {
     btn.addEventListener("click", async () => {
       if (!confirm(`Delete ${btn.dataset.label}? This can't be undone.`)) return;
       btn.disabled = true;
-      btn.textContent = "…";
+      btn.textContent = "Deleting...";
       const user = firebase.auth().currentUser;
       if (!user) return;
       const idToken = await user.getIdToken();
-      const path = btn.dataset.path;
+      const path = btn.dataset.path || "";
+      const slashIndex = path.indexOf("/");
+      const collection = slashIndex === -1 ? path : path.slice(0, slashIndex);
+      const key = slashIndex === -1 ? "" : path.slice(slashIndex + 1);
       let endpoint = "";
-      if (path.startsWith("leaderboard/")) endpoint = "/leaderboard.json";
-      else if (path.startsWith("notes/")) endpoint = "/notes.json";
-      else if (path.startsWith("artworks/")) endpoint = `/artworks/${path.split("/")[1]}.json`;
+      if (!key) return;
+      if (collection === "leaderboard") endpoint = `/leaderboard/${encodeURIComponent(key)}.json`;
+      else if (collection === "notes") endpoint = `/notes/${encodeURIComponent(key)}.json`;
+      else if (collection === "artworks") endpoint = `/artworks/${encodeURIComponent(key)}.json`;
       else return;
       try {
-        await fetch(`${FIREBASE_URL}${endpoint}?auth=${idToken}`, { method: "DELETE" });
+        const res = await fetch(`${FIREBASE_URL}${endpoint}?auth=${idToken}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       } catch (err) {
         console.error("Delete failed:", err);
+        alert("Delete failed. Make sure the admin database rules are deployed.");
+      } finally {
+        loadAllData();
       }
-      loadAllData();
     });
   });
 }
@@ -1226,22 +1324,31 @@ document.getElementById("btn-export-notes").addEventListener("click", async () =
   const res = await fetch(`${FIREBASE_URL}/notes.json`);
   downloadJson("guestbook-notes-export.json", await res.json());
 });
-document.getElementById("btn-clear-leaderboard").addEventListener("click", async () => {
-  if (!confirm("Delete ALL leaderboard entries? This can't be undone.")) return;
+async function clearCollection(collection, label) {
+  if (!confirm(`Delete ALL ${label}? This can't be undone.`)) return;
   const user = firebase.auth().currentUser;
   if (!user) return;
   const idToken = await user.getIdToken();
-  await fetch(`${FIREBASE_URL}/leaderboard.json?auth=${idToken}`, { method: "DELETE" }).catch(() => {});
-  loadAllData();
-});
-document.getElementById("btn-clear-notes").addEventListener("click", async () => {
-  if (!confirm("Delete ALL guestbook notes? This can't be undone.")) return;
-  const user = firebase.auth().currentUser;
-  if (!user) return;
-  const idToken = await user.getIdToken();
-  await fetch(`${FIREBASE_URL}/notes.json?auth=${idToken}`, { method: "DELETE" }).catch(() => {});
-  loadAllData();
-});
+  try {
+    const listRes = await fetch(`${FIREBASE_URL}/${collection}.json?auth=${idToken}`);
+    if (!listRes.ok) throw new Error(`${listRes.status} ${await listRes.text()}`);
+    const data = await listRes.json();
+    const keys = data ? Object.keys(data) : [];
+    const results = await Promise.all(keys.map((key) =>
+      fetch(`${FIREBASE_URL}/${collection}/${encodeURIComponent(key)}.json?auth=${idToken}`, { method: "DELETE" })
+    ));
+    const failed = results.find((res) => !res.ok);
+    if (failed) throw new Error(`${failed.status} ${await failed.text()}`);
+  } catch (err) {
+    console.error("Clear failed:", err);
+    alert("Clear failed. Make sure the admin database rules are deployed.");
+  } finally {
+    loadAllData();
+  }
+}
+
+document.getElementById("btn-clear-leaderboard").addEventListener("click", () => clearCollection("leaderboard", "leaderboard entries"));
+document.getElementById("btn-clear-notes").addEventListener("click", () => clearCollection("notes", "guestbook notes"));
 
 function formatTime(seconds) {
   const s = Math.round(seconds);

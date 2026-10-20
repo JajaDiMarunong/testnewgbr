@@ -322,6 +322,15 @@
     <button id="btn-refresh-admin" class="btn-secondary refresh-btn">↻ Refresh Data</button>
   </div>
 
+  <div id="admin-note-view-modal" class="modal-overlay hidden">
+    <div class="modal-card admin-note-view-card">
+      <p class="modal-eyebrow">Guestbook Note</p>
+      <div id="admin-note-view-content" class="admin-note-view-content"></div>
+      <p id="admin-note-view-name" class="admin-note-view-name"></p>
+      <button id="btn-admin-note-view-close" class="btn-secondary" type="button">Close</button>
+    </div>
+  </div>
+
   <!-- Firebase SDK (load first, no defer) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -345,6 +354,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=5" defer></script>
+  <script src="admin.js?v=6" defer></script>
 </body>
 </html>

@@ -6,12 +6,14 @@
     },
     "leaderboard": {
       ".read": true,
-      ".write": "auth != null && !data.exists() && newData.child('deviceId').val() == auth.uid"
+      "$deviceId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('deviceId').val() == auth.uid) || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3' || auth.token.admin === true)"
+      }
     },
     "notes": {
       ".read": true,
       "$deviceId": {
-        ".write": "auth != null && (auth.uid === $deviceId || auth.token.admin === true)"
+        ".write": "auth != null && (auth.uid === $deviceId || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3' || auth.token.admin === true)"
       }
     },
     "presence": {
@@ -22,7 +24,7 @@
     },
     "analytics_visits": {
       ".write": "auth != null",
-      ".read": "auth != null && auth.token.admin === true"
+      ".read": "auth != null && (auth.token.admin === true || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3')"
     },
     "arBundleCurrent": {
       ".read": true,
