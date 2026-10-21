@@ -42,6 +42,7 @@ const BUILTIN_ARTWORKS = [
      showInMainCollection: true,
      scannable: true,
      published: true,
+     inScavengerHunt: true,
     quiz: [
       {
         question: "Who painted the Portrait of Crisanto de los Reyes y Mendoza?",
@@ -78,6 +79,7 @@ const BUILTIN_ARTWORKS = [
     showInMainCollection: true,
     scannable: true,
     published: true,
+    inScavengerHunt: true,
     quiz: [],
     immersiveSkybox: "./assets/beachskybox.optimized.glb",
     immersiveScale: 3.5,
@@ -524,7 +526,7 @@ function hideFilterToast() {
 function renderGallery() {
   galleryGrid.innerHTML = "";
 
-  const galleryArtworks = artworks.filter((a) => a.published !== false && a.showInMainCollection !== false);
+  const galleryArtworks = artworks.filter((a) => a.published !== false && a.showInMainCollection !== false && a.inScavengerHunt !== false);
 
   const visible = galleryArtworks.filter((art) => {
     if (activeFilter === "locked") return !art.unlocked;
@@ -745,7 +747,7 @@ function awardBadge(key) {
 }
 
 function getCollectionArtworks() {
-  return artworks.filter((a) => a.published !== false && a.showInMainCollection !== false);
+  return artworks.filter((a) => a.published !== false && a.showInMainCollection !== false && a.inScavengerHunt !== false);
 }
 
 function checkAllUnlockedBadge() {
@@ -1925,7 +1927,7 @@ function handleTargetLost(targetIndex) {
 }
 
 function checkCollectionComplete() {
-  const galleryArtworks = artworks.filter((a) => a.published !== false && a.showInMainCollection !== false);
+  const galleryArtworks = artworks.filter((a) => a.published !== false && a.showInMainCollection !== false && a.inScavengerHunt !== false);
   const allUnlocked = galleryArtworks.length > 0 && galleryArtworks.every((a) => a.unlocked);
   if (allUnlocked && !leaderboardSubmitted && sessionStartTime) {
     leaderboardSubmitted = true;
@@ -2145,6 +2147,7 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
           showInMainCollection: val.showInMainCollection !== false,
           scannable: val.scannable !== false,
           published: val.published !== false,
+          inScavengerHunt: val.inScavengerHunt !== false,
           quiz: val.quiz || [],
         }));
         merged = merged.concat(uploaded);
@@ -2154,6 +2157,26 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
     }
   } catch (err) {
     console.warn("Could not load uploaded artworks from Firebase:", err);
+  }
+
+  // Scavenger hunt inclusion is stored separately so built-in artworks can be
+  // toggled without duplicating their full records.
+  try {
+    const settingsRes = await fetch(`${FIREBASE_URL}/artworkSettings.json`);
+    if (settingsRes.ok) {
+      const settings = await settingsRes.json();
+      if (settings) {
+        merged = merged.map((art) => {
+          const override = settings[art.id]?.inScavengerHunt;
+          return {
+            ...art,
+            inScavengerHunt: override !== undefined ? override !== false : art.inScavengerHunt !== false,
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load artwork scavenger hunt settings:", err);
   }
 
   artworks = merged;

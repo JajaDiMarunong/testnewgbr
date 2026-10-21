@@ -4,6 +4,10 @@
       ".read": true,
       ".write": "auth != null && (auth.token.admin === true || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3')"
     },
+    "artworkSettings": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.admin === true || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3')"
+    },
     "leaderboard": {
       ".read": true,
       "$deviceId": {

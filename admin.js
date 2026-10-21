@@ -23,6 +23,7 @@ const BUILTIN_ARTWORKS = [
     showInMainCollection: true,
     scannable: true,
     published: true,
+    inScavengerHunt: true,
     markerImage: "./assets/crisanto-marker.jpg",
   },
 {
@@ -39,6 +40,7 @@ const BUILTIN_ARTWORKS = [
     showInMainCollection: true,
     scannable: true,
     published: true,
+    inScavengerHunt: true,
     markerImage: "./assets/mcarthurmarker.jpg",
   },
 
@@ -95,7 +97,28 @@ const artworkImmersiveForwardInput = document.getElementById("artwork-immersive-
 const artworkMainInput = document.getElementById("artwork-main");
 const artworkScannableInput = document.getElementById("artwork-scannable");
 const artworkPublishedInput = document.getElementById("artwork-published");
+const artworkHuntInput = document.getElementById("artwork-hunt");
 const btnCancelArtworkEdit = document.getElementById("btn-cancel-artwork-edit");
+const btnNewArtwork = document.getElementById("btn-new-artwork");
+const btnCloseArtworkDrawer = document.getElementById("btn-close-artwork-drawer");
+const artworkDrawer = document.getElementById("artwork-drawer");
+const artworkDrawerBackdrop = document.getElementById("artwork-drawer-backdrop");
+const artworkDrawerTitle = document.getElementById("artwork-drawer-title");
+const artworkDrawerEyebrow = document.getElementById("artwork-drawer-eyebrow");
+const artworkSearchInput = document.getElementById("artwork-search");
+const artworkHuntFilter = document.getElementById("artwork-hunt-filter");
+const artworkSelectAll = document.getElementById("artwork-select-all");
+const artworkSelectionCount = document.getElementById("artwork-selection-count");
+const btnBulkEdit = document.getElementById("btn-bulk-edit");
+const bulkEditPanel = document.getElementById("bulk-edit-panel");
+const btnBulkClose = document.getElementById("btn-bulk-close");
+const btnBulkApply = document.getElementById("btn-bulk-apply");
+const bulkHunt = document.getElementById("bulk-hunt");
+const bulkPublished = document.getElementById("bulk-published");
+const bulkScannable = document.getElementById("bulk-scannable");
+const bulkMain = document.getElementById("bulk-main");
+const bulkEditStatus = document.getElementById("bulk-edit-status");
+const artworkCollectionStatus = document.getElementById("artwork-collection-status");
 const btnBuildAr = document.getElementById("btn-build-ar");
 const arBuildStatus = document.getElementById("ar-build-status");
 
@@ -170,6 +193,7 @@ adminPasswordInput.addEventListener("keydown", (e) => {
 });
 btnLogout.addEventListener("click", () => {
   firebase.auth().signOut();
+  resetArtworkForm();
   adminDashboard.classList.add("hidden");
   screenLogin.classList.remove("hidden");
   adminPasswordInput.value = "";
@@ -183,6 +207,7 @@ const pageTitle = document.getElementById("page-title");
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
+    if (artworkDrawer.classList.contains("open")) resetArtworkForm();
     tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
     tabPanels.forEach((p) => p.classList.toggle("hidden", p.id !== `tab-${tab}`));
     if (pageTitle && btn.dataset.pageTitle) pageTitle.textContent = btn.dataset.pageTitle;
@@ -939,11 +964,44 @@ notesApplyCustom.addEventListener("click", renderNotesList);
 // ARTWORKS
 // =====================================================================
 let uploadedArtworksCache = [];
+let artworkSettingsCache = {};
+let allArtworksCache = [];
+let visibleArtworkIds = [];
+let selectedArtworkIds = new Set();
 let editingArtworkId = null;
+let artworkSearchQuery = "";
+let artworkFilterMode = "all";
 
 function numberOrDefault(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function openArtworkDrawer(title, eyebrow) {
+  if (artworkDrawerTitle) artworkDrawerTitle.textContent = title;
+  if (artworkDrawerEyebrow) artworkDrawerEyebrow.textContent = eyebrow;
+  artworkDrawer.classList.add("open");
+  artworkDrawerBackdrop.classList.add("open");
+  artworkDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("drawer-open");
+  artworkDrawer.scrollTop = 0;
+}
+
+function closeArtworkDrawer() {
+  artworkDrawer.classList.remove("open");
+  artworkDrawerBackdrop.classList.remove("open");
+  artworkDrawer.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("drawer-open");
+}
+
+function effectiveHuntStatus(art) {
+  const override = artworkSettingsCache[art.id]?.inScavengerHunt;
+  if (override !== undefined) return override !== false;
+  return art.inScavengerHunt !== false;
+}
+
+function artworkThumb(art) {
+  return art.imageUrl || art.image || "";
 }
 
 function resetArtworkForm() {
@@ -965,12 +1023,16 @@ function resetArtworkForm() {
   artworkMainInput.checked = true;
   artworkScannableInput.checked = true;
   artworkPublishedInput.checked = true;
+  artworkHuntInput.checked = true;
   processedImageBase64 = null;
   imagePreview.classList.add("hidden");
   uploadPlaceholder.classList.remove("hidden");
   markerQualityWrap.classList.add("hidden");
   btnUploadArtwork.textContent = "Upload Artwork";
-  btnCancelArtworkEdit.classList.add("hidden");
+  btnUploadArtwork.disabled = false;
+  uploadStatus.textContent = "";
+  uploadStatus.className = "upload-status";
+  closeArtworkDrawer();
 }
 
 async function startArtworkSettingsEdit(art) {
@@ -988,20 +1050,24 @@ async function startArtworkSettingsEdit(art) {
   artworkMainInput.checked = art.showInMainCollection !== false;
   artworkScannableInput.checked = art.scannable !== false;
   artworkPublishedInput.checked = art.published !== false;
+  artworkHuntInput.checked = effectiveHuntStatus(art);
   if (art.imageUrl || art.image) {
     imagePreview.src = art.imageUrl || art.image;
     imagePreview.classList.remove("hidden");
     uploadPlaceholder.classList.add("hidden");
+  } else {
+    imagePreview.classList.add("hidden");
+    uploadPlaceholder.classList.remove("hidden");
   }
   if (art.markerImageUrl) {
     const file = await fetch(art.markerImageUrl).then(r => r.blob()).then(b => new File([b], "marker.jpg"));
     await analyzeMarkerQuality(file);
   }
-  btnUploadArtwork.textContent = "Save Artwork Settings";
-  btnCancelArtworkEdit.classList.remove("hidden");
-  uploadStatus.textContent = `Editing ${art.name}. Change the AR model scale or forward position, then save.`;
+  btnUploadArtwork.textContent = "Save Artwork";
+  uploadStatus.textContent = `Editing ${art.name}.`;
   uploadStatus.className = "upload-status";
-  document.getElementById("artwork-model-scale").scrollIntoView({ behavior: "smooth", block: "center" });
+  openArtworkDrawer("Edit Artwork", "Collection Entry");
+  artworkDrawer.scrollTop = 0;
 }
 
 // Supabase client for direct uploads (using anon key)
@@ -1046,51 +1112,378 @@ function fileExtension(file, fallback) {
 }
 
 async function loadAdminArtworks() {
-  adminArtworksList.innerHTML = `<p class="leaderboard-status">Loading…</p>`;
+  adminArtworksList.innerHTML = `<p class="collection-empty">Loading artwork collection...</p>`;
   try {
     const user = firebase.auth().currentUser;
     const authParam = user ? `?auth=${await user.getIdToken()}` : "";
-    const res = await fetch(`${FIREBASE_URL}/artworks.json${authParam}`);
+    const [res, settingsRes] = await Promise.all([
+      fetch(`${FIREBASE_URL}/artworks.json${authParam}`),
+      fetch(`${FIREBASE_URL}/artworkSettings.json${authParam}`).catch(() => null),
+    ]);
     console.log("[Admin] Artworks response:", res.status, res.statusText);
     const data = await res.json();
     uploadedArtworksCache = data ? Object.entries(data).map(([key, val]) => ({ key, ...val })) : [];
+    artworkSettingsCache = {};
+    if (settingsRes?.ok) {
+      try {
+        artworkSettingsCache = (await settingsRes.json()) || {};
+      } catch {
+        artworkSettingsCache = {};
+      }
+    }
 
-    const allArtworks = [
+    const merged = [
       ...BUILTIN_ARTWORKS.map((a) => ({ ...a, _source: "builtin" })),
       ...uploadedArtworksCache.map((a) => ({ ...a, _source: "uploaded", id: a.key })),
     ];
+    allArtworksCache = merged.map((art) => ({ ...art, inScavengerHunt: effectiveHuntStatus(art) }));
 
-    document.getElementById("artworks-count-label").textContent = `${allArtworks.length} total`;
+    const validIds = new Set(allArtworksCache.map((art) => art.id));
+    selectedArtworkIds = new Set([...selectedArtworkIds].filter((id) => validIds.has(id)));
+    updateArtworkCountLabel();
+    renderAdminArtworks();
 
-    adminArtworksList.innerHTML = allArtworks
-      .map((art) => {
-        const isBuiltin = art._source === "builtin";
-        const thumb = art.imageUrl || art.image || "";
-        const meta = [art.artist, art.year].filter(Boolean).join(" · ") || "No metadata";
-        return `
-      <div class="artwork-row">
-        <img class="artwork-row-thumb" src="${thumb}" alt="" onerror="this.style.display='none'" />
+    if (!settingsRes?.ok) {
+      console.warn("[Admin] artworkSettings could not be read. Deploy the updated Firebase rules to persist scavenger hunt changes for built-in artworks.");
+    }
+  } catch (err) {
+    console.error("[Admin] Artworks load failed:", err);
+    adminArtworksList.innerHTML = `<p class="collection-empty">Couldn't load artworks.</p>`;
+  }
+}
+
+function updateArtworkCountLabel() {
+  const huntCount = allArtworksCache.filter((art) => art.inScavengerHunt).length;
+  document.getElementById("artworks-count-label").textContent = `${allArtworksCache.length} total | ${huntCount} in hunt`;
+}
+
+function filteredAdminArtworks() {
+  const query = artworkSearchQuery.trim().toLowerCase();
+  return allArtworksCache.filter((art) => {
+    if (artworkFilterMode === "hunt" && !art.inScavengerHunt) return false;
+    if (artworkFilterMode === "not-hunt" && art.inScavengerHunt) return false;
+    if (artworkFilterMode === "draft" && art.published !== false) return false;
+    if (!query) return true;
+    return [art.name, art.artist, art.year, art.location]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
+}
+
+function renderAdminArtworks() {
+  const visible = filteredAdminArtworks();
+  visibleArtworkIds = visible.map((art) => art.id);
+
+  if (!visible.length) {
+    adminArtworksList.innerHTML = `<p class="collection-empty">No artworks match this search or filter.</p>`;
+    updateArtworkSelectionUI();
+    return;
+  }
+
+  adminArtworksList.innerHTML = visible
+    .map((art) => {
+      const isBuiltin = art._source === "builtin";
+      const thumb = artworkThumb(art);
+      const meta = [art.artist, art.year].filter(Boolean).join(" · ") || "No metadata";
+      const selected = selectedArtworkIds.has(art.id);
+      const thumbMarkup = thumb
+        ? `<img class="artwork-row-thumb" src="${escapeAttr(thumb)}" alt="" onerror="this.style.display='none'" />`
+        : `<div class="artwork-row-thumb artwork-thumb-fallback">${escapeHtml((art.name || "?").slice(0, 1))}</div>`;
+      return `
+      <div class="artwork-row ${selected ? "selected" : ""}" data-artwork-id="${escapeAttr(art.id)}">
+        <label class="artwork-select-cell" title="Select ${escapeAttr(art.name || "artwork")}">
+          <input class="artwork-select-input" type="checkbox" data-artwork-id="${escapeAttr(art.id)}" ${selected ? "checked" : ""} />
+        </label>
+        ${thumbMarkup}
         <div class="artwork-row-info">
           <p class="artwork-name">${escapeHtml(art.name)}</p>
           <p class="artwork-meta">${escapeHtml(meta)}</p>
-          <span class="artwork-source ${isBuiltin ? "builtin" : ""}">${isBuiltin ? "Built-in" : "Uploaded"} · ${art.published === false ? "Draft" : "Published"}</span>
+          <div class="artwork-tags">
+            <span class="artwork-source ${isBuiltin ? "builtin" : ""}">${isBuiltin ? "Built-in" : "Uploaded"}</span>
+            <span class="status-pill ${art.published === false ? "draft" : "published"}">${art.published === false ? "Draft" : "Published"}</span>
+            ${art.scannable === false ? "" : `<span class="status-pill">AR</span>`}
+            <span class="status-pill ${art.inScavengerHunt ? "hunt" : "muted"}">${art.inScavengerHunt ? "Scavenger hunt" : "Not in hunt"}</span>
+          </div>
         </div>
-        ${isBuiltin ? "" : `<div class="artwork-row-actions"><button class="btn-tiny artwork-edit-btn" data-artwork-id="${art.id}">Edit Settings</button><button class="admin-delete-btn" data-path="artworks/${art.id}" data-label="this artwork">Delete</button></div>`}
+        <div class="artwork-row-controls">
+          <label class="hunt-switch" title="Toggle scavenger hunt inclusion">
+            <input class="hunt-toggle-input" type="checkbox" data-artwork-id="${escapeAttr(art.id)}" ${art.inScavengerHunt ? "checked" : ""} />
+            <span class="hunt-track"></span>
+            <span>Hunt</span>
+          </label>
+          ${isBuiltin ? "" : `
+          <div class="artwork-row-actions">
+            <button class="btn-tiny artwork-edit-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Edit</button>
+            <button class="admin-delete-btn" type="button" data-path="artworks/${escapeAttr(art.id)}" data-label="this artwork">Delete</button>
+          </div>`}
+        </div>
       </div>`;
-      })
-      .join("");
+    })
+    .join("");
 
-    attachDeleteHandlers();
-adminArtworksList.querySelectorAll(".artwork-edit-btn").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const artwork = uploadedArtworksCache.find((item) => item.key === button.dataset.artworkId);
-        if (artwork) await startArtworkSettingsEdit({ ...artwork, id: artwork.key });
-      });
+  attachDeleteHandlers();
+  adminArtworksList.querySelectorAll(".artwork-edit-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const artwork = allArtworksCache.find((item) => item.id === button.dataset.artworkId);
+      if (artwork) await startArtworkSettingsEdit(artwork);
     });
-  } catch (err) {
-    adminArtworksList.innerHTML = `<p class="leaderboard-status">Couldn't load artworks.</p>`;
+  });
+  adminArtworksList.querySelectorAll(".artwork-select-input").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedArtworkIds.add(checkbox.dataset.artworkId);
+      else selectedArtworkIds.delete(checkbox.dataset.artworkId);
+      updateArtworkSelectionUI();
+    });
+  });
+  adminArtworksList.querySelectorAll(".hunt-toggle-input").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => updateArtworkHunt(checkbox.dataset.artworkId, checkbox.checked));
+  });
+  updateArtworkSelectionUI();
+}
+
+function updateArtworkSelectionUI() {
+  const count = selectedArtworkIds.size;
+  artworkSelectionCount.textContent = `${count} selected`;
+  btnBulkEdit.disabled = count === 0;
+  if (!count) closeBulkEditPanel();
+
+  const visibleSelectedCount = visibleArtworkIds.filter((id) => selectedArtworkIds.has(id)).length;
+  artworkSelectAll.checked = visibleArtworkIds.length > 0 && visibleSelectedCount === visibleArtworkIds.length;
+  artworkSelectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleArtworkIds.length;
+
+  adminArtworksList.querySelectorAll(".artwork-row").forEach((row) => {
+    row.classList.toggle("selected", selectedArtworkIds.has(row.dataset.artworkId));
+  });
+}
+
+function closeBulkEditPanel() {
+  bulkEditPanel.classList.add("hidden");
+  btnBulkEdit.textContent = "Bulk edit";
+  bulkEditStatus.textContent = "";
+  bulkEditStatus.className = "upload-status";
+}
+
+let collectionStatusTimer = null;
+function setArtworkCollectionStatus(message, type = "success") {
+  clearTimeout(collectionStatusTimer);
+  artworkCollectionStatus.textContent = message;
+  artworkCollectionStatus.className = `collection-status ${type}`;
+  artworkCollectionStatus.classList.remove("hidden");
+  if (type === "success") {
+    collectionStatusTimer = setTimeout(() => artworkCollectionStatus.classList.add("hidden"), 5000);
   }
 }
+
+async function updateArtworkHunt(artworkId, shouldInclude) {
+  const artwork = allArtworksCache.find((item) => item.id === artworkId);
+  if (!artwork) return;
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    alert("Sign in again before changing scavenger hunt settings.");
+    renderAdminArtworks();
+    return;
+  }
+
+  try {
+    const idToken = await user.getIdToken();
+    let artworkSaved = false;
+    let settingsSaved = false;
+    let settingsError = null;
+
+    if (artwork._source === "uploaded") {
+      const artResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inScavengerHunt: shouldInclude }),
+      });
+      if (!artResponse.ok) throw new Error(`Artwork update failed (${artResponse.status}).`);
+      artworkSaved = true;
+      const cached = uploadedArtworksCache.find((item) => item.key === artworkId);
+      if (cached) cached.inScavengerHunt = shouldInclude;
+    }
+
+    try {
+      const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inScavengerHunt: shouldInclude }),
+      });
+      if (!settingsResponse.ok) {
+        throw new Error(settingsResponse.status === 401 || settingsResponse.status === 403
+          ? "The artworkSettings Firebase rule is not deployed yet."
+          : `Firebase returned ${settingsResponse.status}.`);
+      }
+      settingsSaved = true;
+    } catch (error) {
+      settingsError = error;
+    }
+
+    if (!settingsSaved && !artworkSaved) {
+      throw settingsError || new Error("Could not save scavenger hunt setting.");
+    }
+    if (!settingsSaved) {
+      console.warn("[Admin] Saved scavenger hunt setting on the artwork only:", settingsError?.message);
+    }
+
+    artworkSettingsCache[artworkId] = { ...(artworkSettingsCache[artworkId] || {}), inScavengerHunt: shouldInclude };
+    artwork.inScavengerHunt = shouldInclude;
+    updateArtworkCountLabel();
+    renderAdminArtworks();
+    setArtworkCollectionStatus(`${artwork.name} ${shouldInclude ? "added to" : "removed from"} the scavenger hunt.`);
+  } catch (err) {
+    console.error("[Admin] Scavenger hunt update failed:", err);
+    setArtworkCollectionStatus(`Could not update scavenger hunt setting. ${err.message}`, "error");
+    renderAdminArtworks();
+  }
+}
+
+async function applyBulkEdit() {
+  const selected = allArtworksCache.filter((art) => selectedArtworkIds.has(art.id));
+  if (!selected.length) return;
+
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    alert("Sign in again before editing artworks.");
+    return;
+  }
+
+  const huntChoice = bulkHunt.value;
+  const publishedChoice = bulkPublished.value;
+  const scannableChoice = bulkScannable.value;
+  const mainChoice = bulkMain.value;
+  if ([huntChoice, publishedChoice, scannableChoice, mainChoice].every((choice) => choice === "keep")) {
+    bulkEditStatus.textContent = "Choose at least one field to change.";
+    bulkEditStatus.className = "upload-status error";
+    return;
+  }
+
+  const idToken = await user.getIdToken();
+  const errors = [];
+  let uploadedUpdated = 0;
+  let huntUpdated = 0;
+  let huntFallback = 0;
+  let skippedBuiltins = 0;
+
+  btnBulkApply.disabled = true;
+  bulkEditStatus.textContent = "Applying changes...";
+  bulkEditStatus.className = "upload-status";
+
+  for (const art of selected) {
+    const visibilityChanges = publishedChoice !== "keep" || scannableChoice !== "keep" || mainChoice !== "keep";
+    const huntValue = huntChoice === "keep" ? null : huntChoice === "yes";
+    const updates = {};
+    if (publishedChoice !== "keep") updates.published = publishedChoice === "yes";
+    if (scannableChoice !== "keep") updates.scannable = scannableChoice === "yes";
+    if (mainChoice !== "keep") updates.showInMainCollection = mainChoice === "yes";
+    if (huntValue !== null && art._source === "uploaded") updates.inScavengerHunt = huntValue;
+
+    if (visibilityChanges && art._source === "builtin") skippedBuiltins += 1;
+
+    if (Object.keys(updates).length) {
+      try {
+        const response = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(art.id)}.json?auth=${idToken}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+        if (!response.ok) throw new Error(`artwork update failed (${response.status})`);
+        uploadedUpdated += 1;
+        if (huntValue !== null) art.inScavengerHunt = huntValue;
+      } catch (err) {
+        errors.push(`${art.name}: ${err.message}`);
+      }
+    }
+
+    if (huntValue !== null) {
+      try {
+        const response = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(art.id)}.json?auth=${idToken}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inScavengerHunt: huntValue }),
+        });
+        if (!response.ok) {
+          throw new Error(response.status === 401 || response.status === 403
+            ? "artworkSettings rule not deployed"
+            : `settings update failed (${response.status})`);
+        }
+        artworkSettingsCache[art.id] = { ...(artworkSettingsCache[art.id] || {}), inScavengerHunt: huntValue };
+        huntUpdated += 1;
+      } catch (err) {
+        if (art._source === "uploaded") {
+          huntFallback += 1;
+          console.warn("[Admin] Hunt saved on artwork but settings node failed:", err);
+        } else {
+          errors.push(`${art.name}: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  selectedArtworkIds.clear();
+  await loadAdminArtworks();
+  closeBulkEditPanel();
+  [bulkHunt, bulkPublished, bulkScannable, bulkMain].forEach((select) => { select.value = "keep"; });
+  btnBulkApply.disabled = false;
+
+  if (errors.length) {
+    setArtworkCollectionStatus(
+      `Updated ${uploadedUpdated} artwork(s), ${huntUpdated} hunt setting(s). ${errors.length} failed: ${errors[0]}`,
+      "error",
+    );
+  } else {
+    const parts = [];
+    if (huntUpdated) parts.push(`${huntUpdated} hunt setting(s)`);
+    if (uploadedUpdated) parts.push(`${uploadedUpdated} artwork(s)`);
+    let message = `Saved ${parts.join(" and ") || "changes"}.`;
+    if (skippedBuiltins) message += " Built-in artworks only support hunt changes.";
+    if (huntFallback) message += ` ${huntFallback} uploaded artwork(s) used the artwork fallback; deploy the artworkSettings rule for built-ins.`;
+    setArtworkCollectionStatus(message, "success");
+  }
+}
+
+artworkSearchInput.addEventListener("input", () => {
+  artworkSearchQuery = artworkSearchInput.value;
+  selectedArtworkIds.clear();
+  renderAdminArtworks();
+});
+artworkHuntFilter.addEventListener("change", () => {
+  artworkFilterMode = artworkHuntFilter.value;
+  selectedArtworkIds.clear();
+  renderAdminArtworks();
+});
+artworkSelectAll.addEventListener("change", () => {
+  visibleArtworkIds.forEach((id) => {
+    if (artworkSelectAll.checked) selectedArtworkIds.add(id);
+    else selectedArtworkIds.delete(id);
+  });
+  updateArtworkSelectionUI();
+});
+btnBulkEdit.addEventListener("click", () => {
+  const opening = bulkEditPanel.classList.contains("hidden");
+  bulkEditPanel.classList.toggle("hidden", !opening);
+  btnBulkEdit.textContent = opening ? "Hide bulk edit" : "Bulk edit";
+  if (opening) {
+    bulkEditStatus.textContent = "";
+    bulkEditStatus.className = "upload-status";
+  }
+});
+btnBulkClose.addEventListener("click", closeBulkEditPanel);
+btnBulkApply.addEventListener("click", applyBulkEdit);
+btnNewArtwork.addEventListener("click", () => {
+  resetArtworkForm();
+  openArtworkDrawer("Upload Artwork", "New Entry");
+  requestAnimationFrame(() => document.getElementById("artwork-name").focus({ preventScroll: true }));
+});
+btnCloseArtworkDrawer.addEventListener("click", resetArtworkForm);
+artworkDrawerBackdrop.addEventListener("click", resetArtworkForm);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!aiModal.classList.contains("hidden")) return;
+  if (artworkDrawer.classList.contains("open")) resetArtworkForm();
+  else if (!bulkEditPanel.classList.contains("hidden")) closeBulkEditPanel();
+});
 
 // ---- Image upload handling ----
 let processedImageBase64 = null;
@@ -1250,24 +1643,56 @@ btnUploadArtwork.addEventListener("click", async () => {
       return;
     }
 
-btnUploadArtwork.disabled = true;
-    uploadStatus.textContent = "Saving artwork settings…";
+    btnUploadArtwork.disabled = true;
+    uploadStatus.textContent = "Saving artwork settings...";
     uploadStatus.className = "upload-status";
     try {
       const user = firebase.auth().currentUser;
       if (!user) throw new Error("Not authenticated");
       const idToken = await user.getIdToken();
+      const name = document.getElementById("artwork-name").value.trim();
+      if (!name) throw new Error("Artwork title is required.");
+
+      const payload = {
+        name,
+        artist: document.getElementById("artwork-artist").value.trim() || null,
+        year: document.getElementById("artwork-year").value.trim() || null,
+        location: document.getElementById("artwork-location").value.trim() || null,
+        details: document.getElementById("artwork-details").value.trim(),
+        baseScale,
+        modelPositionZ,
+        immersiveScale,
+        immersiveRotation,
+        immersiveForward,
+        showInMainCollection: artworkMainInput.checked,
+        scannable: artworkScannableInput.checked,
+        published: artworkPublishedInput.checked,
+        inScavengerHunt: artworkHuntInput.checked,
+      };
 
       const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json?auth=${idToken}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseScale, modelPositionZ, immersiveScale, immersiveRotation, immersiveForward }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(`Firebase artwork settings save failed (${response.status})`);
-      uploadStatus.textContent = "Artwork settings saved successfully!";
+
+      try {
+        const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked }),
+        });
+        if (!settingsResponse.ok) console.warn("[Admin] Could not save artworkSettings entry:", settingsResponse.status);
+      } catch (settingsError) {
+        console.warn("[Admin] Could not save artworkSettings entry:", settingsError);
+      }
+
+      uploadStatus.textContent = "Artwork saved successfully!";
       uploadStatus.className = "upload-status success";
-      resetArtworkForm();
+      loadCounts();
       loadAdminArtworks();
+      setTimeout(resetArtworkForm, 180);
     } catch (err) {
       console.error("Artwork settings save failed:", err);
       uploadStatus.textContent = err?.message || "Could not save artwork settings.";
@@ -1332,6 +1757,7 @@ const artwork = {
       showInMainCollection: artworkMainInput.checked,
       scannable: artworkScannableInput.checked,
       published: artworkPublishedInput.checked,
+      inScavengerHunt: artworkHuntInput.checked,
       createdAt: Date.now(),
     };
 
@@ -1347,14 +1773,23 @@ const artwork = {
     });
     if (!response.ok) throw new Error(`Firebase artwork save failed (${response.status})`);
 
+    try {
+      const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked }),
+      });
+      if (!settingsResponse.ok) console.warn("[Admin] Could not save artworkSettings entry:", settingsResponse.status);
+    } catch (settingsError) {
+      console.warn("[Admin] Could not save artworkSettings entry:", settingsError);
+    }
+
     uploadStatus.textContent = "Artwork uploaded successfully!";
     uploadStatus.className = "upload-status success";
 
-    // Reset form
-    resetArtworkForm();
-
-    loadAdminArtworks();
     loadCounts();
+    loadAdminArtworks();
+    setTimeout(resetArtworkForm, 180);
   } catch (err) {
     console.error("Artwork upload failed:", err);
     uploadStatus.textContent = err?.message || "Upload failed. Check your connection.";
