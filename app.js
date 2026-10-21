@@ -38,28 +38,10 @@ const BUILTIN_ARTWORKS = [
     immersiveScale: 3,
     immersiveRotation: "0 0 0",
     unlocked: false,
-     quizCompleted: false,
-     showInMainCollection: true,
-     scannable: true,
-     published: true,
-     inScavengerHunt: true,
-    quiz: [
-      {
-        question: "Who painted the Portrait of Crisanto de los Reyes y Mendoza?",
-        options: ["Juan Luna", "Rafael del Casal", "Fernando Amorsolo", "Felix Resurreccion Hidalgo"],
-        correctIndex: 1,
-      },
-      {
-        question: "Crisanto de los Reyes was implicated in which historical event?",
-        options: ["The Philippine Revolution of 1896", "The 1872 Cavite Mutiny", "The Gomburza execution", "The Cry of Pugad Lawin"],
-        correctIndex: 1,
-      },
-      {
-        question: "Which of Crisanto's businesses produced an ingredient used in French perfumes?",
-        options: ["Sugar plantation", "Ylang-ylang oil distillery", "Coffee roasting factory", "Coconut oil mill"],
-        correctIndex: 1,
-      },
-    ],
+    showInMainCollection: true,
+    scannable: true,
+    published: true,
+    inScavengerHunt: true,
   },
 {
     id: "builtin-mcarthur",
@@ -75,12 +57,10 @@ const BUILTIN_ARTWORKS = [
     baseScale: 1,
     icon: "🎖️",
     unlocked: false,
-    quizCompleted: false,
     showInMainCollection: true,
     scannable: true,
     published: true,
     inScavengerHunt: true,
-    quiz: [],
     immersiveSkybox: "./assets/beachskybox.optimized.glb",
     immersiveScale: 3.5,
     immersiveRotation: "0 270 0",
@@ -103,25 +83,11 @@ const badges = {
     icon: "🔍",
     earned: false,
   },
-  firstQuiz: {
-    id: "firstQuiz",
-    name: "First Quiz",
-    description: "Complete your first quiz",
-    icon: "📝",
-    earned: false,
-  },
   allUnlocked: {
     id: "allUnlocked",
     name: "All Unlocked",
     description: "Unlock every artwork in the collection",
     icon: "🔓",
-    earned: false,
-  },
-  allQuizzes: {
-    id: "allQuizzes",
-    name: "All Quizzes",
-    description: "Complete every artwork quiz",
-    icon: "🎓",
     earned: false,
   },
   allBadges: {
@@ -147,7 +113,6 @@ const btnUsernameSubmit = document.getElementById("btn-username-submit");
 const screenHome = document.getElementById("screen-home");
 const screenScanner = document.getElementById("screen-scanner");
 const screenDetail = document.getElementById("screen-detail");
-const screenQuiz = document.getElementById("screen-quiz");
 const screenBadges = document.getElementById("screen-badges");
 const screenLeaderboard = document.getElementById("screen-leaderboard");
 
@@ -190,15 +155,6 @@ const detailImage = document.getElementById("detail-image");
 const detailTitle = document.getElementById("detail-title");
 const detailText = document.getElementById("detail-text");
 const btnDetailBack = document.getElementById("btn-detail-back");
-const btnTakeQuiz = document.getElementById("btn-take-quiz");
-const quizDoneNote = document.getElementById("quiz-done-note");
-
-const quizProgress = document.getElementById("quiz-progress");
-const quizQuestion = document.getElementById("quiz-question");
-const quizOptions = document.getElementById("quiz-options");
-const quizFeedback = document.getElementById("quiz-feedback");
-const btnQuizNext = document.getElementById("btn-quiz-next");
-const btnQuizBack = document.getElementById("btn-quiz-back");
 
 const btnOpenBadges = document.getElementById("btn-open-badges");
 const btnBadgesBack = document.getElementById("btn-badges-back");
@@ -343,7 +299,6 @@ function persistProgress() {
   const progress = {
     username: currentUsername,
     unlocked: artworks.filter((art) => art.unlocked).map((art) => art.id),
-    quizCompleted: artworks.filter((art) => art.quizCompleted).map((art) => art.id),
     badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned])),
     sessionStartTime,
     finalElapsedSeconds,
@@ -361,10 +316,8 @@ function restoreProgress() {
     finalElapsedSeconds = progress.finalElapsedSeconds ?? null;
     leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
     const unlocked = new Set(progress.unlocked || []);
-    const quizCompleted = new Set(progress.quizCompleted || []);
     artworks.forEach((art) => {
       art.unlocked = unlocked.has(art.id);
-      art.quizCompleted = quizCompleted.has(art.id);
     });
     Object.entries(progress.badges || {}).forEach(([key, earned]) => {
       if (badges[key]) badges[key].earned = Boolean(earned);
@@ -438,19 +391,6 @@ function updateRunTimer() {
 }
 
 setInterval(updateRunTimer, 1000);
-
-// -------------------------------------------------------------------
-// Device ID
-// -------------------------------------------------------------------
-function getDeviceId() {
-  let id = localStorage.getItem("museum_device_id");
-  if (!id) {
-    id = "d_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem("museum_device_id", id);
-  }
-  return id;
-}
-const myDeviceId = getDeviceId();
 
 const homeBgLayer = document.getElementById("home-bg-layer");
 const homeBgImg = document.getElementById("home-bg-img");
@@ -545,7 +485,6 @@ function renderGallery() {
       <div class="art-card-fallback" style="display:none;">${art.icon}</div>
       <div class="art-card-scrim"></div>
       <div class="status-badge ${art.unlocked ? "unlocked" : ""}">${art.unlocked ? "✓ Unlocked" : "🔒 Locked"}</div>
-      ${art.quizCompleted ? `<div class="quiz-check-ribbon">✓</div>` : ""}
       <div class="art-card-caption">
         <h3>${art.name}</h3>
         <p>${art.unlocked ? "Tap to view details" : "Scan this artwork to reveal it"}</p>
@@ -593,7 +532,6 @@ function hideAllScreens() {
   screenHome.classList.add("hidden");
   screenScanner.classList.add("hidden");
   screenDetail.classList.add("hidden");
-  screenQuiz.classList.add("hidden");
   screenBadges.classList.add("hidden");
   screenLeaderboard.classList.add("hidden");
   screenLibrary.classList.add("hidden");
@@ -753,11 +691,6 @@ function getCollectionArtworks() {
 function checkAllUnlockedBadge() {
   const collection = getCollectionArtworks();
   if (collection.length > 0 && collection.every((a) => a.unlocked)) awardBadge("allUnlocked");
-}
-
-function checkAllQuizzesBadge() {
-  const quizArtworks = getCollectionArtworks().filter((a) => a.quiz && a.quiz.length > 0);
-  if (quizArtworks.length > 0 && quizArtworks.every((a) => a.quizCompleted)) awardBadge("allQuizzes");
 }
 
 function checkAllBadgesBadge() {
@@ -1051,9 +984,6 @@ function openDetail(artworkId) {
   detailTitle.textContent = art.name;
   detailText.textContent = art.details;
 
-  const hasQuiz = art.quiz && art.quiz.length > 0;
-  btnTakeQuiz.style.display = hasQuiz ? "block" : "none";
-  quizDoneNote.classList.toggle("hidden", !art.quizCompleted);
   const hasImmersive = !!art.immersiveSkybox;
   btnImmersive.classList.toggle("hidden", !hasImmersive);
   btnImmersive.onclick = () => startImmersive(art);
@@ -1064,90 +994,6 @@ function openDetail(artworkId) {
 }
 
 btnDetailBack.addEventListener("click", showHome);
-btnTakeQuiz.addEventListener("click", () => {
-  if (currentDetailArtId !== null) startQuiz(currentDetailArtId);
-});
-
-// -------------------------------------------------------------------
-// Quiz
-// -------------------------------------------------------------------
-let quizArtId = null;
-let quizIndex = 0;
-let quizScore = 0;
-
-function startQuiz(artworkId) {
-  const art = artworks.find((a) => a.id === artworkId);
-  if (!art || !art.quiz || art.quiz.length === 0) return;
-
-  quizArtId = artworkId;
-  quizIndex = 0;
-  quizScore = 0;
-
-  hideAllScreens();
-  screenQuiz.classList.remove("hidden");
-  renderQuizQuestion();
-}
-
-function renderQuizQuestion() {
-  const art = artworks.find((a) => a.id === quizArtId);
-  const q = art.quiz[quizIndex];
-
-  quizProgress.textContent = `Question ${quizIndex + 1} / ${art.quiz.length}`;
-  quizQuestion.textContent = q.question;
-  quizFeedback.classList.add("hidden");
-  btnQuizNext.classList.add("hidden");
-
-  quizOptions.innerHTML = "";
-  q.options.forEach((option, i) => {
-    const btn = document.createElement("button");
-    btn.className = "quiz-option-btn";
-    btn.textContent = option;
-    btn.addEventListener("click", () => selectQuizAnswer(i));
-    quizOptions.appendChild(btn);
-  });
-}
-
-function selectQuizAnswer(selectedIndex) {
-  const art = artworks.find((a) => a.id === quizArtId);
-  const q = art.quiz[quizIndex];
-  const optionButtons = quizOptions.querySelectorAll(".quiz-option-btn");
-
-  optionButtons.forEach((btn, i) => {
-    btn.disabled = true;
-    if (i === q.correctIndex) btn.classList.add("correct");
-    else if (i === selectedIndex) btn.classList.add("incorrect");
-  });
-
-  const isCorrect = selectedIndex === q.correctIndex;
-  if (isCorrect) quizScore++;
-
-  quizFeedback.textContent = isCorrect ? "Correct!" : "Not quite — the highlighted answer was correct.";
-  quizFeedback.className = "quiz-feedback " + (isCorrect ? "correct" : "incorrect");
-  quizFeedback.classList.remove("hidden");
-
-  btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "Finish Quiz" : "Next Question";
-  btnQuizNext.classList.remove("hidden");
-}
-
-btnQuizNext.addEventListener("click", () => {
-  const art = artworks.find((a) => a.id === quizArtId);
-  if (quizIndex < art.quiz.length - 1) {
-    quizIndex++;
-    renderQuizQuestion();
-  } else {
-    const firstTimeCompletingAnyQuiz = !art.quizCompleted && !Object.values(artworks).some((a) => a.quizCompleted);
-    art.quizCompleted = true;
-    if (firstTimeCompletingAnyQuiz) awardBadge("firstQuiz");
-    persistProgress();
-    checkAllQuizzesBadge();
-    openDetail(quizArtId);
-  }
-});
-
-btnQuizBack.addEventListener("click", () => {
-  if (currentDetailArtId !== null) openDetail(currentDetailArtId);
-  else showHome();
-});
 
 // -------------------------------------------------------------------
 // Firebase: leaderboard
@@ -1212,6 +1058,7 @@ const BOARD_HEIGHT = 800;
 const NOTE_W = 140;
 const NOTE_H = 160;
 const NOTE_MARGIN = 36;
+const MIN_NOTE_GAP = 24;
 const BOARD_PADDING = 30;
 let allNotesCache = [];
 let boardScale = 1;
@@ -1219,10 +1066,15 @@ let boardX = 0;
 let boardY = 0;
 
 function getNotesBoardColumns() {
-  return Math.max(
-    1,
-    Math.floor((BOARD_WIDTH - BOARD_PADDING * 2 - NOTE_W) / (NOTE_W + NOTE_MARGIN)) + 1
-  );
+  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
+  return Math.max(1, Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP)));
+}
+
+function getNotesBoardHorizontalGap() {
+  const columns = getNotesBoardColumns();
+  if (columns <= 1) return 0;
+  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
+  return (usableWidth - columns * NOTE_W) / (columns - 1);
 }
 
 function getNotesBoardHeight(noteCount) {
@@ -1242,8 +1094,8 @@ function fitNotesBoardToViewport() {
   const scaleX = wrapW / BOARD_WIDTH;
   const scaleY = wrapH / boardHeight;
   boardScale = Math.min(scaleX, scaleY, 1);
-  boardX = 0;
-  boardY = 0;
+  boardX = Math.max(0, (wrapW - BOARD_WIDTH * boardScale) / 2);
+  boardY = Math.max(0, (wrapH - boardHeight * boardScale) / 2);
   applyBoardTransform();
 }
 let editingMode = "text";
@@ -1262,7 +1114,7 @@ async function loadNotesBoard() {
     if (!res.ok) throw new Error("status " + res.status);
     const data = await res.json();
     allNotesCache = data
-      ? Object.entries(data).map(([deviceId, note]) => ({ ...note, deviceId }))
+      ? Object.entries(data).map(([ownerId, note]) => ({ ...note, ownerId }))
       : [];
     renderNotesBoard();
     fitNotesBoardToViewport();
@@ -1274,16 +1126,30 @@ async function loadNotesBoard() {
 
 function getNoteBoardPosition(index) {
   const columns = getNotesBoardColumns();
+  const gap = getNotesBoardHorizontalGap();
   return {
-    x: BOARD_PADDING + (index % columns) * (NOTE_W + NOTE_MARGIN),
+    x: BOARD_PADDING + (index % columns) * (NOTE_W + gap),
     y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
   };
+}
+
+function getCurrentNoteOwnerId() {
+  return firebase.auth().currentUser?.uid || null;
+}
+
+function isMyNote(note) {
+  const ownerId = getCurrentNoteOwnerId();
+  return Boolean(ownerId && note.ownerId === ownerId);
+}
+
+function getMyNote() {
+  return allNotesCache.find(isMyNote) || null;
 }
 
 function renderNotesBoard() {
   notesBoard.innerHTML = "";
   const notesForDisplay = [...allNotesCache].sort(
-    (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.deviceId.localeCompare(b.deviceId)
+    (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.ownerId.localeCompare(b.ownerId)
   );
 
   notesForDisplay.forEach((note, index) => {
@@ -1295,7 +1161,7 @@ function renderNotesBoard() {
     el.className =
       "note-sticky" +
       (note.type === "photo" ? " type-photo" : "") +
-      (note.deviceId === myDeviceId ? " mine" : "");
+      (isMyNote(note) ? " mine" : "");
     el.style.left = note.x + "px";
     el.style.top = note.y + "px";
     if (note.type !== "photo") el.style.background = note.color || NOTE_COLORS[0];
@@ -1316,7 +1182,7 @@ function renderNotesBoard() {
     el.appendChild(nameTag);
 
     el.addEventListener("click", () => {
-      if (note.deviceId === myDeviceId) openNoteEditor(note);
+      if (isMyNote(note)) openNoteEditor(note);
       else openNoteView(note);
     });
 
@@ -1332,8 +1198,8 @@ function updateNotesGate() {
 
 function updateNewNoteButton() {
   updateNotesGate();
-  const myNote = allNotesCache.find((n) => n.deviceId === myDeviceId);
-  btnNewNote.textContent = myNote ? "✏️ Edit My Note" : "+ New Note";
+  const myNote = getMyNote();
+  btnNewNote.textContent = myNote ? "✎ Edit My Note" : "+ New Note";
 }
 
 // ---- board pan + pinch-zoom ----
@@ -1600,8 +1466,7 @@ function openNoteEditor(existingNote) {
 }
 
 btnNewNote.addEventListener("click", () => {
-  const myNote = allNotesCache.find((n) => n.deviceId === myDeviceId);
-  openNoteEditor(myNote || null);
+  openNoteEditor(getMyNote());
 });
 
 btnNoteCancel.addEventListener("click", () => {
@@ -2143,12 +2008,10 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
           immersiveForward: val.immersiveForward == null ? -3 : Number(val.immersiveForward),
           icon: val.icon || "🖼️",
           unlocked: false,
-          quizCompleted: false,
           showInMainCollection: val.showInMainCollection !== false,
           scannable: val.scannable !== false,
           published: val.published !== false,
           inScavengerHunt: val.inScavengerHunt !== false,
-          quiz: val.quiz || [],
         }));
         merged = merged.concat(uploaded);
       }
@@ -2231,7 +2094,7 @@ const TOUR_STEPS = [
     target: null,
     illustration: "🖼️",
     title: "Welcome to the GBR Museum!",
-    text: "Your personal gallery awaits. Scan artworks with AR to unlock hidden stories, take quizzes, and collect badges along the way.",
+    text: "Your personal gallery awaits. Scan artworks with AR to unlock hidden stories and collect badges along the way.",
   },
   {
     target: "#gallery-grid",
@@ -2514,7 +2377,6 @@ async function bootMuseum() {
     await initArtworks();
     restoreProgress();
     checkAllUnlockedBadge();
-    checkAllQuizzesBadge();
     if (currentUsername) {
       screenUsername.classList.add("hidden");
       showHome();

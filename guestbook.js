@@ -11,6 +11,7 @@ const BOARD_HEIGHT = 1000;
 const NOTE_W = 180;
 const NOTE_H = 200;
 const NOTE_MARGIN = 36;
+const MIN_NOTE_GAP = 24;
 const BOARD_PADDING = 30;
 const REFRESH_INTERVAL = 5; // seconds
 
@@ -168,8 +169,8 @@ function fitBoardToViewport() {
   const scaleX = wrapW / BOARD_WIDTH;
   const scaleY = wrapH / boardHeight;
   boardScale = Math.min(scaleX, scaleY, 1);
-  boardX = 0;
-  boardY = 0;
+  boardX = Math.max(0, (wrapW - BOARD_WIDTH * boardScale) / 2);
+  boardY = Math.max(0, (wrapH - boardHeight * boardScale) / 2);
   applyBoardTransform();
 }
 
@@ -223,10 +224,15 @@ async function loadNotesBoard() {
 // Overlap prevention
 // -------------------------------------------------------------------
 function getNotesBoardColumns() {
-  return Math.max(
-    1,
-    Math.floor((BOARD_WIDTH - BOARD_PADDING * 2 - NOTE_W) / (NOTE_W + NOTE_MARGIN)) + 1
-  );
+  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
+  return Math.max(1, Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP)));
+}
+
+function getNotesBoardHorizontalGap() {
+  const columns = getNotesBoardColumns();
+  if (columns <= 1) return 0;
+  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
+  return (usableWidth - columns * NOTE_W) / (columns - 1);
 }
 
 function getNotesBoardHeight(noteCount) {
@@ -239,8 +245,9 @@ function getNotesBoardHeight(noteCount) {
 
 function getNoteBoardPosition(index) {
   const columns = getNotesBoardColumns();
+  const gap = getNotesBoardHorizontalGap();
   return {
-    x: BOARD_PADDING + (index % columns) * (NOTE_W + NOTE_MARGIN),
+    x: BOARD_PADDING + (index % columns) * (NOTE_W + gap),
     y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
   };
 }
