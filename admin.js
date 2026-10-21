@@ -179,11 +179,13 @@ btnLogout.addEventListener("click", () => {
 // -------------------------------------------------------------------
 // Tabs
 // -------------------------------------------------------------------
+const pageTitle = document.getElementById("page-title");
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
     tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
     tabPanels.forEach((p) => p.classList.toggle("hidden", p.id !== `tab-${tab}`));
+    if (pageTitle && btn.dataset.pageTitle) pageTitle.textContent = btn.dataset.pageTitle;
   });
 });
 
@@ -335,13 +337,48 @@ Output: {"title":"Andres Bonifacio","artist":"Guillermo Tolentino","year":"1930"
 // =====================================================================
 // STATS
 // =====================================================================
+const STATS_DAY_MS = 24 * 60 * 60 * 1000;
 let cachedVisitTimestamps = [];
 let visitDataError = false;
 let currentVisitsRange = "week";
+let cachedKnownDevices = new Set();
+let cachedLeaderboardStats = [];
+let cachedNoteStats = [];
+let cachedArtworkStats = [];
 
 async function loadAdminStats() {
   await Promise.all([loadActiveNow(), loadVisitData(), loadCounts()]);
   renderVisitsChart(currentVisitsRange);
+  renderAnalytics();
+  setStatText(
+    "stats-updated",
+    `Updated ${new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
+  );
+}
+
+function setStatText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function startOfLocalDay(timestamp = Date.now()) {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function percentOf(part, total) {
+  return total > 0 ? Math.round((part / total) * 100) : 0;
+}
+
+function formatHourRange(hour) {
+  const start = new Date();
+  start.setHours(hour, 0, 0, 0);
+  const end = new Date();
+  end.setHours((hour + 1) % 24, 0, 0, 0);
+  const startLabel = start.toLocaleTimeString(undefined, { hour: "numeric" });
+  const endLabel = end.toLocaleTimeString(undefined, { hour: "numeric" });
+  return `${startLabel}–${endLabel}`;
 }
 
 async function loadActiveNow() {
@@ -350,11 +387,13 @@ async function loadActiveNow() {
     const authParam = user ? `?auth=${await user.getIdToken()}` : "";
     const res = await fetch(`${FIREBASE_URL}/presence.json${authParam}`);
     const data = await res.json();
-    const entries = data ? Object.values(data) : [];
-    const activeCount = entries.filter((p) => Date.now() - p.timestamp < 60000).length;
-    document.getElementById("stat-active-now").textContent = activeCount;
+    const entries = data ? Object.entries(data) : [];
+    const activeCount = entries.filter(([, p]) => p && Date.now() - (p.timestamp || 0) < 60000).length;
+    cachedKnownDevices = new Set(entries.map(([key]) => key));
+    setStatText("stat-active-now", activeCount);
   } catch (err) {
-    document.getElementById("stat-active-now").textContent = "?";
+    cachedKnownDevices = new Set();
+    setStatText("stat-active-now", "—");
   }
 }
 
@@ -371,19 +410,25 @@ async function loadCounts() {
     const lbData = await lbRes.json();
     const notesData = await notesRes.json();
 
+    cachedArtworkStats = [...BUILTIN_ARTWORKS, ...(artData ? Object.values(artData) : [])];
+    cachedLeaderboardStats = lbData ? Object.entries(lbData) : [];
+    cachedNoteStats = notesData ? Object.entries(notesData) : [];
+
     const uploadedCount = artData ? Object.keys(artData).length : 0;
-    document.getElementById("stat-artwork-count").textContent = BUILTIN_ARTWORKS.length + uploadedCount;
-    document.getElementById("stat-leaderboard-count").textContent = lbData ? Object.keys(lbData).length : 0;
-    document.getElementById("stat-notes-count").textContent = notesData ? Object.keys(notesData).length : 0;
+    setStatText("stat-artwork-count", BUILTIN_ARTWORKS.length + uploadedCount);
+    setStatText("stat-leaderboard-count", cachedLeaderboardStats.length);
+    setStatText("stat-notes-count", cachedNoteStats.length);
   } catch (err) {
-    document.getElementById("stat-artwork-count").textContent = "?";
-    document.getElementById("stat-leaderboard-count").textContent = "?";
-    document.getElementById("stat-notes-count").textContent = "?";
+    cachedArtworkStats = [];
+    cachedLeaderboardStats = [];
+    cachedNoteStats = [];
+    setStatText("stat-artwork-count", "—");
+    setStatText("stat-leaderboard-count", "—");
+    setStatText("stat-notes-count", "—");
   }
 }
 
 async function loadVisitData() {
-  const DAY = 24 * 60 * 60 * 1000;
   visitDataError = false;
   try {
     const user = firebase.auth().currentUser;
@@ -391,10 +436,12 @@ async function loadVisitData() {
     const res = await fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`);
     if (!res.ok) throw new Error(`analytics_visits: ${res.status} ${await res.text()}`);
     const data = await res.json();
-    cachedVisitTimestamps = data ? Object.values(data).map((v) => v.timestamp).filter(Boolean) : [];
+    cachedVisitTimestamps = data
+      ? Object.values(data).map((v) => v && v.timestamp).filter((t) => Number.isFinite(t))
+      : [];
 
-    const staleCutoff = Date.now() - 35 * DAY;
-    const staleEntries = data ? Object.entries(data).filter(([, v]) => v.timestamp < staleCutoff) : [];
+    const staleCutoff = Date.now() - 35 * STATS_DAY_MS;
+    const staleEntries = data ? Object.entries(data).filter(([, v]) => v && v.timestamp < staleCutoff) : [];
     for (const [key] of staleEntries) {
       const authParam2 = user ? `?auth=${await user.getIdToken()}` : "";
       fetch(`${FIREBASE_URL}/analytics_visits/${key}.json${authParam2}`, { method: "DELETE" }).catch(() => {});
@@ -404,6 +451,143 @@ async function loadVisitData() {
     visitDataError = true;
     console.error("[Admin] Could not load analytics:", err);
   }
+}
+
+function renderAnalytics() {
+  const now = Date.now();
+  const todayStart = startOfLocalDay(now);
+  const weekStart = todayStart - 6 * STATS_DAY_MS;
+  const previousWeekStart = weekStart - 7 * STATS_DAY_MS;
+  const yesterdayStart = todayStart - STATS_DAY_MS;
+
+  const visits = cachedVisitTimestamps.filter((t) => Number.isFinite(t));
+  const todayVisits = visits.filter((t) => t >= todayStart).length;
+  const yesterdayVisits = visits.filter((t) => t >= yesterdayStart && t < todayStart).length;
+  const weekVisits = visits.filter((t) => t >= weekStart).length;
+  const previousWeekVisits = visits.filter((t) => t >= previousWeekStart && t < weekStart).length;
+
+  const noteCount = cachedNoteStats.length;
+  const completionCount = cachedLeaderboardStats.length;
+  const recentNoteCount = cachedNoteStats.filter(([, note]) => Number(note && note.timestamp) >= weekStart).length;
+
+  setStatText("stat-visits-today", todayVisits);
+  setStatText("stat-visits-week", weekVisits);
+  setStatText("stat-visits-today-note", yesterdayVisits === 0 ? "No visits yesterday" : `${yesterdayVisits} yesterday`);
+  setStatText("stat-notes-note", recentNoteCount === 0 ? "No notes in the last 7 days" : `${recentNoteCount} added in the last 7 days`);
+
+  const weekChange = previousWeekVisits > 0
+    ? Math.round(((weekVisits - previousWeekVisits) / previousWeekVisits) * 100)
+    : null;
+  setStatText(
+    "stat-visits-week-note",
+    weekChange === null
+      ? (weekVisits > 0 ? "First week of recorded activity" : "No visits recorded yet")
+      : `${weekChange >= 0 ? "+" : ""}${weekChange}% vs previous week`
+  );
+
+  const knownVisitors = new Set(cachedKnownDevices);
+  cachedLeaderboardStats.forEach(([key, entry]) => knownVisitors.add(entry && entry.deviceId ? entry.deviceId : key));
+  cachedNoteStats.forEach(([key]) => knownVisitors.add(key));
+  const visitorCount = knownVisitors.size;
+  const completionRate = Math.min(100, percentOf(completionCount, visitorCount));
+  setStatText(
+    "stat-completions-note",
+    visitorCount > 0 ? `${completionRate}% of known visitors finished` : "No visitor activity yet"
+  );
+
+  const weekdayCounts = Array(7).fill(0);
+  const recentCutoff = now - 28 * STATS_DAY_MS;
+  visits.filter((t) => t >= recentCutoff).forEach((t) => {
+    weekdayCounts[new Date(t).getDay()]++;
+  });
+  const busiestWeekday = weekdayCounts.indexOf(Math.max(...weekdayCounts));
+  const busiestWeekdayCount = weekdayCounts[busiestWeekday];
+  const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  setStatText(
+    "insight-busiest-day",
+    busiestWeekdayCount > 0 ? `${weekdayNames[busiestWeekday]} · ${busiestWeekdayCount}` : "No visits yet"
+  );
+
+  const hourCounts = Array(24).fill(0);
+  visits.forEach((t) => {
+    hourCounts[new Date(t).getHours()]++;
+  });
+  const peakHour = hourCounts.indexOf(Math.max(...hourCounts));
+  const peakHourCount = hourCounts[peakHour];
+  setStatText("insight-peak-hour", peakHourCount > 0 ? `${formatHourRange(peakHour)} · ${peakHourCount}` : "No visits yet");
+
+  const dailyAverage = weekVisits / 7;
+  setStatText(
+    "insight-daily-average",
+    weekVisits > 0 ? `${dailyAverage % 1 === 0 ? dailyAverage : dailyAverage.toFixed(1)} visits / day` : "No visits yet"
+  );
+  setStatText(
+    "insight-week-change",
+    weekChange === null
+      ? (weekVisits > 0 ? "No previous data" : "No visits yet")
+      : `${weekChange >= 0 ? "+" : ""}${weekChange}%`
+  );
+
+  const completionTimes = cachedLeaderboardStats
+    .map(([, entry]) => Number(entry && entry.time))
+    .filter((time) => Number.isFinite(time) && time >= 0);
+  if (completionTimes.length > 0) {
+    const averageTime = completionTimes.reduce((sum, time) => sum + time, 0) / completionTimes.length;
+    setStatText("insight-average-completion", formatTime(Math.round(averageTime)));
+    setStatText("insight-fastest-completion", formatTime(Math.min(...completionTimes)));
+  } else {
+    setStatText("insight-average-completion", "No completions yet");
+    setStatText("insight-fastest-completion", "No completions yet");
+  }
+
+  setStatText("journey-rate", `${completionRate}%`);
+  setStatText("journey-completed", completionCount);
+  setStatText("journey-visitors", visitorCount);
+  setStatText("journey-notes", noteCount);
+  const donut = document.getElementById("journey-donut");
+  if (donut) donut.style.setProperty("--pct", String(completionRate));
+  setStatText(
+    "journey-footnote",
+    visitorCount > 0
+      ? `Based on ${visitorCount} visitor device${visitorCount === 1 ? "" : "s"} seen across presence, completion, and guestbook records.`
+      : "No visitor devices have been recorded yet."
+  );
+
+  const noteMix = { text: 0, draw: 0, photo: 0 };
+  cachedNoteStats.forEach(([, note]) => {
+    const type = note && (note.type === "draw" || note.type === "photo") ? note.type : "text";
+    noteMix[type]++;
+  });
+  const totalNotes = noteMix.text + noteMix.draw + noteMix.photo;
+  ["text", "draw", "photo"].forEach((type) => {
+    const value = noteMix[type];
+    setStatText(`note-mix-${type}-count`, `${value} · ${percentOf(value, totalNotes)}%`);
+    const bar = document.getElementById(`note-mix-${type}-bar`);
+    if (bar) bar.style.width = `${percentOf(value, totalNotes)}%`;
+  });
+  setStatText(
+    "note-mix-summary",
+    totalNotes > 0
+      ? `${recentNoteCount} added in the last 7 days · ${totalNotes} note${totalNotes === 1 ? "" : "s"} on the board.`
+      : "No guestbook notes yet."
+  );
+
+  const artworks = cachedArtworkStats;
+  const published = artworks.filter((art) => art && art.published !== false).length;
+  const scannable = artworks.filter((art) => art
+    && art.published !== false
+    && art.scannable !== false
+    && (art.markerImageUrl || art.markerImage || art.imageUrl || art.image)).length;
+  const models = artworks.filter((art) => art && (art.hasModel || art.modelUrl)).length;
+  const readiness = percentOf(scannable, artworks.length);
+
+  setStatText("stat-artwork-count", artworks.length);
+  setStatText("stat-artwork-published", published);
+  setStatText("stat-artwork-scannable", scannable);
+  setStatText("stat-artwork-models", models);
+  setStatText("readiness-percent", `${readiness}%`);
+  const readinessBar = document.getElementById("readiness-bar");
+  if (readinessBar) readinessBar.style.width = `${readiness}%`;
 }
 
 function getWeekStart(date) {
@@ -467,14 +651,17 @@ function renderVisitsChart(range) {
 
   const maxCount = Math.max(1, ...bars.map((b) => b.count));
   visitsChart.innerHTML = bars
-    .map(
-      (b) => `
-    <div class="visits-chart-bar">
+    .map((b) => {
+      const height = b.count === 0 ? 0 : Math.max(4, Math.round((b.count / maxCount) * 100));
+      return `
+    <div class="visits-chart-bar" title="${b.label}: ${b.count} visit${b.count === 1 ? "" : "s"}">
       <span class="visits-chart-bar-count">${b.count}</span>
-      <div class="visits-chart-bar-fill" style="height: ${Math.max(4, (b.count / maxCount) * 60)}px;"></div>
+      <div class="visits-chart-bar-track">
+        <div class="visits-chart-bar-fill" style="height: ${height}%;"></div>
+      </div>
       <span class="visits-chart-bar-label">${b.label}</span>
-    </div>`
-    )
+    </div>`;
+    })
     .join("");
 
   const total = bars.reduce((sum, b) => sum + b.count, 0);

@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Museum AR — Admin Panel</title>
-<link rel="stylesheet" href="admin.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GBR Jr. Museum — Admin Console</title>
+<link rel="stylesheet" href="admin.css?v=7" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js"></script>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js" defer></script>
@@ -14,14 +14,31 @@
 <body>
 
   <!-- LOGIN SCREEN -->
-  <div id="screen-login" class="modal-overlay">
-    <div class="modal-card">
-      <p class="modal-eyebrow">Restricted</p>
-      <h2>Admin Login</h2>
-      <p class="modal-desc">Manage artworks, leaderboard, and guestbook.</p>
-      <input id="admin-password-input" class="text-input" type="password" placeholder="Admin password" />
-      <p id="admin-login-error" class="admin-error hidden">Incorrect password.</p>
-      <button id="btn-admin-login-submit" class="btn-primary">Log In</button>
+  <div id="screen-login" class="login-screen">
+    <div class="login-panel">
+      <section class="login-brand">
+        <div class="brand-mark">GBR</div>
+        <p class="eyebrow">Museum Operations</p>
+        <h1>GBR Jr. Museum</h1>
+        <p class="login-lede">Manage the collection, review visitor activity, and keep the augmented reality experience running smoothly.</p>
+        <ul class="login-highlights">
+          <li>AR collection and target publishing</li>
+          <li>Visitor traffic and engagement analytics</li>
+          <li>Leaderboard and guestbook moderation</li>
+        </ul>
+        <p class="login-location">General Trias, Philippines</p>
+      </section>
+
+      <section class="login-card">
+        <p class="eyebrow">Restricted Access</p>
+        <h2>Admin Sign In</h2>
+        <p class="modal-desc">Use the museum administrator account to continue.</p>
+        <label class="field-label" for="admin-password-input">Password</label>
+        <input id="admin-password-input" class="text-input" type="password" placeholder="Enter admin password" autocomplete="current-password" />
+        <p id="admin-login-error" class="admin-error hidden">Incorrect password.</p>
+        <button id="btn-admin-login-submit" class="btn-primary">Sign In</button>
+        <p class="login-footnote">Authorized staff only. Activity is recorded for museum operations.</p>
+      </section>
     </div>
   </div>
 
@@ -35,291 +52,505 @@
       <p id="ai-modal-status" class="ai-status"></p>
       <div class="modal-actions">
         <button id="btn-ai-cancel" class="btn-secondary">Cancel</button>
-        <button id="btn-ai-submit" class="btn-primary" style="margin-top:0;">✨ Auto-Fill Fields</button>
+        <button id="btn-ai-submit" class="btn-primary">Auto-Fill Fields</button>
       </div>
     </div>
   </div>
 
   <!-- MAIN ADMIN DASHBOARD -->
-  <div id="admin-dashboard" class="hidden">
-    <header class="admin-header">
-      <div>
-        <p class="eyebrow">GBR Jr. Museum</p>
-        <h1>Admin Panel</h1>
+  <div id="admin-dashboard" class="admin-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark small">GBR</div>
+        <div>
+          <strong>GBR Jr. Museum</strong>
+          <span>Collection Console</span>
+        </div>
       </div>
-      <button id="btn-logout" class="btn-secondary btn-small">Log Out</button>
-    </header>
 
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="stats">Stats</button>
-      <button class="tab-btn" data-tab="artworks">Artworks</button>
-      <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
-      <button class="tab-btn" data-tab="notes">Guestbook</button>
+      <nav class="sidebar-nav" aria-label="Admin sections">
+        <button class="tab-btn active" data-tab="stats" data-page-title="Visitor Overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span>Overview</span>
+        </button>
+        <button class="tab-btn" data-tab="artworks" data-page-title="Artwork Collection">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span>Artworks</span>
+        </button>
+        <button class="tab-btn" data-tab="leaderboard" data-page-title="Leaderboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a3 3 0 0 0 3 4"/><path d="M17 6h3a3 3 0 0 1-3 4"/></svg>
+          <span>Leaderboard</span>
+        </button>
+        <button class="tab-btn" data-tab="notes" data-page-title="Guestbook">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8z"/><path d="M8 8h8"/><path d="M8 12h5"/></svg>
+          <span>Guestbook</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-live">
+          <span class="live-dot"></span>
+          <div>
+            <strong>System Online</strong>
+            <span>Firebase connected</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="topbar-title">
+          <p class="eyebrow">Museum Operations</p>
+          <h1 id="page-title">Visitor Overview</h1>
+        </div>
+        <div class="topbar-actions">
+          <span id="stats-updated" class="topbar-updated">Not refreshed yet</span>
+          <button id="btn-refresh-admin" class="btn-secondary btn-small" type="button">Refresh Data</button>
+          <button id="btn-logout" class="btn-secondary btn-small btn-logout" type="button">Sign Out</button>
+        </div>
+      </header>
+
+      <main class="admin-content">
+
+        <!-- STATS TAB -->
+        <section id="tab-stats" class="tab-panel">
+          <div class="section-intro">
+            <div>
+              <h2>Visitor Analytics</h2>
+              <p>Live and historical engagement across the museum experience.</p>
+            </div>
+            <span class="status-chip"><span class="live-dot"></span> Live tracking</span>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi-card kpi-live">
+              <div class="kpi-top">
+                <span class="kpi-label">Live Now</span>
+                <span class="live-pill"><span class="live-dot"></span>Live</span>
+              </div>
+              <span id="stat-active-now" class="kpi-value">—</span>
+              <span class="kpi-caption">Visitors active in the last 60 seconds</span>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Visits Today</span>
+                <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></svg>
+              </div>
+              <span id="stat-visits-today" class="kpi-value">—</span>
+              <span id="stat-visits-today-note" class="kpi-caption">Compared with yesterday</span>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">7-Day Visits</span>
+                <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 3 6-7"/><path d="M14 8h4v4"/></svg>
+              </div>
+              <span id="stat-visits-week" class="kpi-value">—</span>
+              <span id="stat-visits-week-note" class="kpi-caption">Compared with the previous week</span>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Completions</span>
+                <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a3 3 0 0 0 3 4"/><path d="M17 6h3a3 3 0 0 1-3 4"/></svg>
+              </div>
+              <span id="stat-leaderboard-count" class="kpi-value">—</span>
+              <span id="stat-completions-note" class="kpi-caption">Visitors who finished the collection</span>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Guestbook Notes</span>
+                <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8z"/><path d="M8 8h8"/><path d="M8 12h5"/></svg>
+              </div>
+              <span id="stat-notes-count" class="kpi-value">—</span>
+              <span id="stat-notes-note" class="kpi-caption">Notes left by visitors</span>
+            </article>
+          </div>
+
+          <div class="analytics-grid analytics-grid-main">
+            <section class="panel panel-traffic">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Traffic</p>
+                  <h3>Site Visits</h3>
+                </div>
+                <div class="visits-filter" id="visits-filter">
+                  <button class="filter-tab active" data-range="week">This Week</button>
+                  <button class="filter-tab" data-range="lastweek">Last Week</button>
+                  <button class="filter-tab" data-range="month">This Month</button>
+                  <button class="filter-tab" data-range="all">All Time</button>
+                </div>
+              </header>
+              <div id="visits-chart" class="visits-chart"></div>
+              <p id="visits-chart-total" class="visits-chart-total">—</p>
+            </section>
+
+            <aside class="panel panel-insights">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Patterns</p>
+                  <h3>Visitor Insights</h3>
+                </div>
+              </header>
+              <ul class="insight-list">
+                <li><span>Busiest weekday</span><strong id="insight-busiest-day">—</strong></li>
+                <li><span>Peak visiting hour</span><strong id="insight-peak-hour">—</strong></li>
+                <li><span>Daily average</span><strong id="insight-daily-average">—</strong></li>
+                <li><span>Week over week</span><strong id="insight-week-change">—</strong></li>
+                <li><span>Avg. completion time</span><strong id="insight-average-completion">—</strong></li>
+                <li><span>Fastest completion</span><strong id="insight-fastest-completion">—</strong></li>
+              </ul>
+            </aside>
+          </div>
+
+          <div class="analytics-grid analytics-grid-secondary">
+            <section class="panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Journey</p>
+                  <h3>Visitor Funnel</h3>
+                </div>
+              </header>
+              <div class="funnel-layout">
+                <div id="journey-donut" class="donut">
+                  <div class="donut-center">
+                    <strong id="journey-rate">—</strong>
+                    <span>completion</span>
+                  </div>
+                </div>
+                <div class="legend-list">
+                  <div class="legend-item">
+                    <span class="legend-dot gold"></span>
+                    <span>Completed collection</span>
+                    <strong id="journey-completed">—</strong>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-dot muted"></span>
+                    <span>Visitors seen</span>
+                    <strong id="journey-visitors">—</strong>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-dot green"></span>
+                    <span>Left a note</span>
+                    <strong id="journey-notes">—</strong>
+                  </div>
+                </div>
+              </div>
+              <p class="panel-footnote" id="journey-footnote">Based on visitors seen across presence, completions, and guestbook activity.</p>
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Guestbook</p>
+                  <h3>Note Mix</h3>
+                </div>
+              </header>
+              <div class="mix-list">
+                <div class="mix-row">
+                  <div class="mix-row-head"><span>Text notes</span><strong id="note-mix-text-count">—</strong></div>
+                  <div class="meter"><span id="note-mix-text-bar" class="meter-fill meter-gold"></span></div>
+                </div>
+                <div class="mix-row">
+                  <div class="mix-row-head"><span>Drawings</span><strong id="note-mix-draw-count">—</strong></div>
+                  <div class="meter"><span id="note-mix-draw-bar" class="meter-fill meter-blue"></span></div>
+                </div>
+                <div class="mix-row">
+                  <div class="mix-row-head"><span>Photos</span><strong id="note-mix-photo-count">—</strong></div>
+                  <div class="meter"><span id="note-mix-photo-bar" class="meter-fill meter-green"></span></div>
+                </div>
+              </div>
+              <p class="panel-footnote" id="note-mix-summary">No guestbook notes yet.</p>
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">AR Collection</p>
+                  <h3>Readiness</h3>
+                </div>
+              </header>
+              <div class="readiness-head">
+                <strong id="readiness-percent">—</strong>
+                <span>of the collection is AR-ready</span>
+              </div>
+              <div class="meter"><span id="readiness-bar" class="meter-fill meter-gold"></span></div>
+              <ul class="mini-stats">
+                <li><span>Total works</span><strong id="stat-artwork-count">—</strong></li>
+                <li><span>Published</span><strong id="stat-artwork-published">—</strong></li>
+                <li><span>Scannable targets</span><strong id="stat-artwork-scannable">—</strong></li>
+                <li><span>3D models</span><strong id="stat-artwork-models">—</strong></li>
+              </ul>
+            </section>
+          </div>
+        </section>
+
+        <!-- ARTWORKS TAB -->
+        <section id="tab-artworks" class="tab-panel hidden">
+          <div class="section-intro">
+            <div>
+              <h2>Artwork Collection</h2>
+              <p>Upload, edit, and prepare works for the augmented reality experience.</p>
+            </div>
+            <span id="artworks-count-label" class="status-chip neutral">—</span>
+          </div>
+
+          <div class="artworks-layout">
+            <div class="upload-panel panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">New Entry</p>
+                  <h3>Upload Artwork</h3>
+                </div>
+              </header>
+
+              <button id="btn-open-ai-modal" class="btn-secondary btn-small ai-fill-btn" type="button">AI Assistant — Auto-Fill Info</button>
+
+              <div class="form-section">
+                <h4 class="form-section-title">Artwork Details</h4>
+
+                <div class="form-group">
+                  <label for="artwork-name">Title <span class="required">*</span></label>
+                  <input id="artwork-name" class="text-input" type="text" placeholder="e.g. Starry Night" />
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="artwork-artist">Artist</label>
+                    <input id="artwork-artist" class="text-input" type="text" placeholder="e.g. Vincent van Gogh" />
+                  </div>
+                  <div class="form-group">
+                    <label for="artwork-year">Year</label>
+                    <input id="artwork-year" class="text-input" type="text" placeholder="e.g. 1889" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-location">Location</label>
+                  <input id="artwork-location" class="text-input" type="text" placeholder="e.g. MoMA, New York" />
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-details">Description <span class="required">*</span></label>
+                  <textarea id="artwork-details" class="note-textarea" rows="4" placeholder="Full description of the artwork…"></textarea>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h4 class="form-section-title">Media</h4>
+
+                <div class="form-group">
+                  <label>Artwork Photo <span class="required">*</span></label>
+                  <div class="image-upload-zone" id="image-upload-zone">
+                    <input type="file" id="artwork-image" accept="image/*" hidden />
+                    <img id="image-preview" class="hidden" alt="Preview" />
+                    <div id="upload-placeholder" class="upload-placeholder">
+                      <span class="upload-icon">+</span>
+                      <span>Select artwork image</span>
+                      <span class="upload-hint">JPG or PNG, max 5MB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-marker">AR Marker Image</label>
+                  <div class="file-input-row">
+                    <input type="file" id="artwork-marker" accept="image/*" />
+                    <span class="upload-hint">Use the artwork as it appears on display</span>
+                  </div>
+                  <div id="marker-quality-wrap" class="marker-quality-wrap hidden">
+                    <div class="marker-quality-preview">
+                      <img id="marker-quality-img" src="" alt="Marker preview" />
+                      <div id="marker-quality-canvas-wrap" class="hidden"><canvas id="marker-quality-canvas"></canvas></div>
+                    </div>
+                    <div class="marker-quality-info">
+                      <div class="quality-row">
+                        <span class="quality-label">Resolution</span>
+                        <span id="marker-quality-resolution">—</span>
+                      </div>
+                      <div class="quality-row">
+                        <span class="quality-label">Contrast score</span>
+                        <span id="marker-quality-contrast">—</span>
+                        <span id="marker-quality-contrast-bar" class="quality-bar"><span class="quality-bar-fill"></span></span>
+                      </div>
+                      <div class="quality-row">
+                        <span class="quality-label">Feature points (est.)</span>
+                        <span id="marker-quality-features">—</span>
+                      </div>
+                      <div class="quality-row">
+                        <span class="quality-label">Overall</span>
+                        <span id="marker-quality-rating" class="quality-rating">—</span>
+                      </div>
+                      <button id="btn-test-marker" class="btn-secondary btn-small" type="button">Test with MindAR Compiler</button>
+                      <span id="marker-test-status" class="upload-status hidden"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-model">3D Model (.glb)</label>
+                  <input type="file" id="artwork-model" accept=".glb,model/gltf-binary" />
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-skybox">Immersive Skybox (.glb)</label>
+                  <input type="file" id="artwork-skybox" accept=".glb,model/gltf-binary" />
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h4 class="form-section-title">AR &amp; Immersive Placement</h4>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="artwork-model-scale">AR Model Scale</label>
+                    <input id="artwork-model-scale" class="text-input" type="number" min="0.001" max="10" step="0.001" value="0.5" />
+                    <span class="upload-hint">Crisanto uses 0.5</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="artwork-model-forward">Forward Position (Z)</label>
+                    <input id="artwork-model-forward" class="text-input" type="number" min="-5" max="5" step="0.01" value="0.1" />
+                    <span class="upload-hint">Crisanto uses 0.1</span>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="artwork-immersive-scale">Immersive Scale</label>
+                    <input id="artwork-immersive-scale" class="text-input" type="number" min="0.001" max="100" step="0.01" value="1" />
+                    <span class="upload-hint">Skybox size (Crisanto: 1, MacArthur: 3.5)</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="artwork-immersive-rotation">Immersive Rotation (X Y Z)</label>
+                    <input id="artwork-immersive-rotation" class="text-input" type="text" value="0 0 0" placeholder="e.g. 0 270 0" />
+                    <span class="upload-hint">Degrees: pitch yaw roll (MacArthur: 0 270 0)</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="artwork-immersive-forward">Immersive Forward Position (Z)</label>
+                  <input id="artwork-immersive-forward" class="text-input" type="number" min="-20" max="20" step="0.1" value="-3" />
+                  <span class="upload-hint">Distance from camera in immersive view. Default: -3</span>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h4 class="form-section-title">Visibility</h4>
+                <div class="artwork-options">
+                  <label class="checkbox-label"><input id="artwork-main" type="checkbox" checked /> Show in Main Collection</label>
+                  <label class="checkbox-label"><input id="artwork-scannable" type="checkbox" checked /> Scannable with AR</label>
+                  <label class="checkbox-label"><input id="artwork-published" type="checkbox" checked /> Published</label>
+                </div>
+              </div>
+
+              <button id="btn-upload-artwork" class="btn-primary">Upload Artwork</button>
+              <button id="btn-cancel-artwork-edit" class="btn-secondary hidden" type="button">Cancel Edit</button>
+              <p id="upload-status" class="upload-status"></p>
+            </div>
+
+            <div class="artworks-list-panel panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Collection</p>
+                  <h3>Existing Artworks</h3>
+                </div>
+              </header>
+
+              <div id="admin-artworks-list" class="admin-artworks-list"></div>
+
+              <div class="ar-publish-panel">
+                <p class="eyebrow">AR Target Bundle</p>
+                <p class="modal-desc">Build a new target file after adding or changing scannable artworks. Visitors keep using the last complete bundle until this finishes.</p>
+                <button id="btn-build-ar" class="btn-primary" type="button">Build and Publish AR Collection</button>
+                <p id="ar-build-status" class="upload-status"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- LEADERBOARD TAB -->
+        <section id="tab-leaderboard" class="tab-panel hidden">
+          <div class="section-intro">
+            <div>
+              <h2>Leaderboard</h2>
+              <p>Fastest collection completions, newest first when unfiltered.</p>
+            </div>
+            <div class="admin-section-actions">
+              <button id="btn-export-leaderboard" class="btn-tiny">Export JSON</button>
+              <button id="btn-clear-leaderboard" class="btn-tiny danger">Clear All</button>
+            </div>
+          </div>
+
+          <div class="panel table-panel">
+            <div class="date-filter-bar">
+              <span class="date-filter-label">Filter by date</span>
+              <select id="lb-date-filter" class="date-select">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="week">This Week</option>
+                <option value="lastweek">Last Week</option>
+                <option value="month">This Month</option>
+                <option value="lastmonth">Last Month</option>
+                <option value="custom">Custom Range…</option>
+              </select>
+              <div id="lb-custom-range" class="custom-range hidden">
+                <input type="date" id="lb-date-from" class="date-input" />
+                <span>to</span>
+                <input type="date" id="lb-date-to" class="date-input" />
+                <button id="lb-apply-custom" class="btn-tiny">Apply</button>
+              </div>
+              <span id="lb-filter-count" class="filter-count"></span>
+            </div>
+
+            <div id="admin-leaderboard-list" class="admin-list"></div>
+          </div>
+        </section>
+
+        <!-- NOTES TAB -->
+        <section id="tab-notes" class="tab-panel hidden">
+          <div class="section-intro">
+            <div>
+              <h2>Guestbook</h2>
+              <p>Review and moderate visitor notes, drawings, and photos.</p>
+            </div>
+            <div class="admin-section-actions">
+              <button id="btn-export-notes" class="btn-tiny">Export JSON</button>
+              <button id="btn-clear-notes" class="btn-tiny danger">Clear All</button>
+            </div>
+          </div>
+
+          <div class="panel table-panel">
+            <div class="date-filter-bar">
+              <span class="date-filter-label">Filter by date</span>
+              <select id="notes-date-filter" class="date-select">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="week">This Week</option>
+                <option value="lastweek">Last Week</option>
+                <option value="month">This Month</option>
+                <option value="lastmonth">Last Month</option>
+                <option value="custom">Custom Range…</option>
+              </select>
+              <div id="notes-custom-range" class="custom-range hidden">
+                <input type="date" id="notes-date-from" class="date-input" />
+                <span>to</span>
+                <input type="date" id="notes-date-to" class="date-input" />
+                <button id="notes-apply-custom" class="btn-tiny">Apply</button>
+              </div>
+              <span id="notes-filter-count" class="filter-count"></span>
+            </div>
+
+            <div id="admin-notes-list" class="admin-list"></div>
+          </div>
+        </section>
+
+      </main>
     </div>
-
-    <!-- STATS TAB -->
-    <section id="tab-stats" class="tab-panel">
-      <div class="active-now-banner">
-        <span class="active-now-dot"></span>
-        <span id="stat-active-now" class="active-now-value">—</span>
-        <span class="active-now-label">people on the site</span>
-      </div>
-
-      <div class="admin-section-header" style="margin-top:22px;">
-        <p class="eyebrow" style="margin:0;">Site Visits</p>
-        <div class="visits-filter" id="visits-filter">
-          <button class="filter-tab active" data-range="week">This Week</button>
-          <button class="filter-tab" data-range="lastweek">Last Week</button>
-          <button class="filter-tab" data-range="month">This Month</button>
-          <button class="filter-tab" data-range="all">All Time</button>
-        </div>
-      </div>
-      <div id="visits-chart" class="visits-chart"></div>
-      <p id="visits-chart-total" class="visits-chart-total">—</p>
-
-      <p class="eyebrow" style="margin-top:26px;">Collection Summary</p>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span id="stat-artwork-count" class="stat-value">—</span>
-          <span class="stat-label">Artworks</span>
-        </div>
-        <div class="stat-card">
-          <span id="stat-leaderboard-count" class="stat-value">—</span>
-          <span class="stat-label">Leaderboard Entries</span>
-        </div>
-        <div class="stat-card">
-          <span id="stat-notes-count" class="stat-value">—</span>
-          <span class="stat-label">Guestbook Notes</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ARTWORKS TAB -->
-    <section id="tab-artworks" class="tab-panel hidden">
-      <div class="artworks-layout">
-        <!-- Upload Form -->
-        <div class="upload-panel">
-          <p class="eyebrow">Add New</p>
-          <h3>Upload Artwork</h3>
-          <p class="modal-desc">-</p>
-
-          <button id="btn-open-ai-modal" class="btn-secondary btn-small" style="width:100%; margin-bottom:14px;">AI Assistant — Auto-Fill Info</button>
-
-          <div class="form-group">
-            <label>Artwork Photo <span class="required">*</span></label>
-            <div class="image-upload-zone" id="image-upload-zone">
-              <input type="file" id="artwork-image" accept="image/*" hidden />
-              <img id="image-preview" class="hidden" alt="Preview" />
-              <div id="upload-placeholder" class="upload-placeholder">
-                <span class="upload-icon">📷</span>
-                <span>Tap to select image</span>
-                <span class="upload-hint">JPG or PNG, max 5MB</span>
-              </div>
-            </div>
-          </div>
-
-<div class="form-group">
-            <label>AR Marker Image</label>
-            <div class="file-input-row">
-              <input type="file" id="artwork-marker" accept="image/*" />
-              <span class="upload-hint">Use the artwork as it appears on display</span>
-            </div>
-            <div id="marker-quality-wrap" class="hidden">
-              <div class="marker-quality-preview">
-                <img id="marker-quality-img" src="" alt="Marker preview" />
-                <div id="marker-quality-canvas-wrap" class="hidden"><canvas id="marker-quality-canvas"></canvas></div>
-              </div>
-              <div class="marker-quality-info">
-                <div class="quality-row">
-                  <span class="quality-label">Resolution:</span>
-                  <span id="marker-quality-resolution">—</span>
-                </div>
-                <div class="quality-row">
-                  <span class="quality-label">Contrast Score:</span>
-                  <span id="marker-quality-contrast">—</span>
-                  <span id="marker-quality-contrast-bar" class="quality-bar"><span class="quality-bar-fill"></span></span>
-                </div>
-                <div class="quality-row">
-                  <span class="quality-label">Feature Points (est.):</span>
-                  <span id="marker-quality-features">—</span>
-                </div>
-                <div class="quality-row">
-                  <span class="quality-label">Overall:</span>
-                  <span id="marker-quality-rating" class="quality-rating">—</span>
-                </div>
-                <button id="btn-test-marker" class="btn-secondary btn-small" type="button">Test with MindAR Compiler</button>
-                <span id="marker-test-status" class="upload-status hidden"></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>3D Model (.glb)</label>
-            <input type="file" id="artwork-model" accept=".glb,model/gltf-binary" />
-          </div>
-
-          <div class="form-group">
-            <label>Immersive Skybox (.glb)</label>
-            <input type="file" id="artwork-skybox" accept=".glb,model/gltf-binary" />
-          </div>
-
-<div class="form-row">
-            <div class="form-group">
-              <label>AR Model Scale</label>
-              <input id="artwork-model-scale" class="text-input" type="number" min="0.001" max="10" step="0.001" value="0.5" />
-              <span class="upload-hint">Crisanto uses 0.5</span>
-            </div>
-            <div class="form-group">
-              <label>Forward Position (Z)</label>
-              <input id="artwork-model-forward" class="text-input" type="number" min="-5" max="5" step="0.01" value="0.1" />
-              <span class="upload-hint">Crisanto uses 0.1</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Immersive Scale</label>
-              <input id="artwork-immersive-scale" class="text-input" type="number" min="0.001" max="100" step="0.01" value="1" />
-              <span class="upload-hint">Skybox size in immersive view (Crisanto: 1, MacArthur: 3.5)</span>
-            </div>
-            <div class="form-group">
-              <label>Immersive Rotation (X Y Z)</label>
-              <input id="artwork-immersive-rotation" class="text-input" type="text" value="0 0 0" placeholder="e.g. 0 270 0" />
-              <span class="upload-hint">Degrees: pitch yaw roll (MacArthur: 0 270 0)</span>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Immersive Forward Position (Z)</label>
-            <input id="artwork-immersive-forward" class="text-input" type="number" min="-20" max="20" step="0.1" value="-3" />
-            <span class="upload-hint">Distance from camera in immersive view (negative = forward). Default: -3</span>
-          </div>
-
-          <div class="form-group">
-            <label>Title <span class="required">*</span></label>
-            <input id="artwork-name" class="text-input" type="text" placeholder="e.g. Starry Night" />
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Artist</label>
-              <input id="artwork-artist" class="text-input" type="text" placeholder="e.g. Vincent van Gogh" />
-            </div>
-            <div class="form-group">
-              <label>Year</label>
-              <input id="artwork-year" class="text-input" type="text" placeholder="e.g. 1889" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Location</label>
-            <input id="artwork-location" class="text-input" type="text" placeholder="e.g. MoMA, New York" />
-          </div>
-
-          <div class="form-group">
-            <label>Description <span class="required">*</span></label>
-            <textarea id="artwork-details" class="note-textarea" rows="4" placeholder="Full description of the artwork…"></textarea>
-          </div>
-
-          <div class="artwork-options">
-            <label class="checkbox-label"><input id="artwork-main" type="checkbox" checked /> Show in Main Collection</label>
-            <label class="checkbox-label"><input id="artwork-scannable" type="checkbox" checked /> Scannable with AR</label>
-            <label class="checkbox-label"><input id="artwork-published" type="checkbox" checked /> Published</label>
-          </div>
-
-          <button id="btn-upload-artwork" class="btn-primary">Upload Artwork</button>
-          <button id="btn-cancel-artwork-edit" class="btn-secondary hidden" type="button">Cancel Edit</button>
-          <p id="upload-status" class="upload-status"></p>
-        </div>
-
-        <!-- Existing Artworks List -->
-        <div class="artworks-list-panel">
-          <div class="admin-section-header">
-            <p class="eyebrow" style="margin:0;">Existing Artworks</p>
-            <span id="artworks-count-label" class="upload-status"></span>
-          </div>
-          <div id="admin-artworks-list" class="admin-artworks-list"></div>
-          <div class="ar-publish-panel">
-            <p class="eyebrow" style="margin:0 0 6px;">AR Collection</p>
-            <p class="modal-desc">Build a new target file after adding or changing scannable artworks. Visitors keep using the last complete bundle until this finishes.</p>
-            <button id="btn-build-ar" class="btn-primary">Build and Publish AR Collection</button>
-            <p id="ar-build-status" class="upload-status"></p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- LEADERBOARD TAB -->
-    <section id="tab-leaderboard" class="tab-panel hidden">
-      <div class="admin-section-header">
-        <p class="eyebrow" style="margin:0;">Leaderboard Entries</p>
-        <div class="admin-section-actions">
-          <button id="btn-export-leaderboard" class="btn-tiny">Export JSON</button>
-          <button id="btn-clear-leaderboard" class="btn-tiny danger">Clear All</button>
-        </div>
-      </div>
-
-      <!-- Date Filter -->
-      <div class="date-filter-bar">
-        <span class="date-filter-label">Filter by date:</span>
-        <select id="lb-date-filter" class="date-select">
-          <option value="all">All Time</option>
-          <option value="today">Today</option>
-          <option value="yesterday">Yesterday</option>
-          <option value="week">This Week</option>
-          <option value="lastweek">Last Week</option>
-          <option value="month">This Month</option>
-          <option value="lastmonth">Last Month</option>
-          <option value="custom">Custom Range…</option>
-        </select>
-        <div id="lb-custom-range" class="custom-range hidden">
-          <input type="date" id="lb-date-from" class="date-input" />
-          <span>to</span>
-          <input type="date" id="lb-date-to" class="date-input" />
-          <button id="lb-apply-custom" class="btn-tiny">Apply</button>
-        </div>
-        <span id="lb-filter-count" class="filter-count"></span>
-      </div>
-
-      <div id="admin-leaderboard-list" class="admin-list"></div>
-    </section>
-
-    <!-- NOTES TAB -->
-    <section id="tab-notes" class="tab-panel hidden">
-      <div class="admin-section-header">
-        <p class="eyebrow" style="margin:0;">Guestbook Notes</p>
-        <div class="admin-section-actions">
-          <button id="btn-export-notes" class="btn-tiny">Export JSON</button>
-          <button id="btn-clear-notes" class="btn-tiny danger">Clear All</button>
-        </div>
-      </div>
-
-      <!-- Date Filter -->
-      <div class="date-filter-bar">
-        <span class="date-filter-label">Filter by date:</span>
-        <select id="notes-date-filter" class="date-select">
-          <option value="all">All Time</option>
-          <option value="today">Today</option>
-          <option value="yesterday">Yesterday</option>
-          <option value="week">This Week</option>
-          <option value="lastweek">Last Week</option>
-          <option value="month">This Month</option>
-          <option value="lastmonth">Last Month</option>
-          <option value="custom">Custom Range…</option>
-        </select>
-        <div id="notes-custom-range" class="custom-range hidden">
-          <input type="date" id="notes-date-from" class="date-input" />
-          <span>to</span>
-          <input type="date" id="notes-date-to" class="date-input" />
-          <button id="notes-apply-custom" class="btn-tiny">Apply</button>
-        </div>
-        <span id="notes-filter-count" class="filter-count"></span>
-      </div>
-
-      <div id="admin-notes-list" class="admin-list"></div>
-    </section>
-
-    <button id="btn-refresh-admin" class="btn-secondary refresh-btn">↻ Refresh Data</button>
   </div>
 
   <div id="admin-note-view-modal" class="modal-overlay hidden">
@@ -354,6 +585,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=6" defer></script>
+  <script src="admin.js?v=7" defer></script>
 </body>
 </html>
