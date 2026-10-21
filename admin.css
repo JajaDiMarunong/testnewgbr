@@ -303,6 +303,26 @@ svg { display: block; }
 .login-card .modal-desc { margin-bottom: 20px; }
 .login-card .btn-primary { margin-top: 18px; }
 .login-footnote { margin-top: 18px; color: var(--muted-2); font-size: 11px; line-height: 1.5; text-align: center; }
+.login-install-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding: 9px 12px;
+  color: var(--gold);
+  background: var(--gold-softer);
+  border: 1px dashed rgba(201, 168, 106, 0.36);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.login-install-btn:hover {
+  background: var(--gold-soft);
+  border-color: rgba(201, 168, 106, 0.5);
+}
 
 .brand-mark {
   display: flex;
@@ -472,6 +492,20 @@ svg { display: block; }
 .topbar-actions { display: flex; align-items: center; gap: 9px; }
 .topbar-updated { margin-right: 4px; color: var(--muted-2); font-size: 11.5px; white-space: nowrap; }
 .btn-logout { color: var(--text-dim); }
+.btn-install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--gold-bright);
+  background: var(--gold-soft);
+  border-color: rgba(201, 168, 106, 0.32);
+}
+.btn-install:hover {
+  background: rgba(201, 168, 106, 0.19);
+  border-color: rgba(201, 168, 106, 0.5);
+}
+.btn-install svg { width: 15px; height: 15px; }
 
 .admin-content {
   width: 100%;

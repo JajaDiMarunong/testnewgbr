@@ -55,6 +55,8 @@ const adminPasswordInput = document.getElementById("admin-password-input");
 const adminLoginError = document.getElementById("admin-login-error");
 const btnAdminLoginSubmit = document.getElementById("btn-admin-login-submit");
 const btnLogout = document.getElementById("btn-logout");
+const btnInstallAdmin = document.getElementById("btn-install-admin");
+const btnInstallAdminLogin = document.getElementById("btn-install-admin-login");
 
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
@@ -199,6 +201,59 @@ btnLogout.addEventListener("click", () => {
   adminPasswordInput.value = "";
   adminLoginError.classList.add("hidden");
 });
+
+// -------------------------------------------------------------------
+// Install as desktop app
+// -------------------------------------------------------------------
+let adminAppInstalled = false;
+const adminStandaloneQuery = window.matchMedia("(display-mode: standalone)");
+const adminInstallButtons = [btnInstallAdmin, btnInstallAdminLogin].filter(Boolean);
+
+function isAdminAppInstalled() {
+  return adminAppInstalled || adminStandaloneQuery.matches || window.navigator.standalone === true;
+}
+
+function updateAdminInstallButtons() {
+  adminInstallButtons.forEach((button) => {
+    button.classList.toggle("hidden", isAdminAppInstalled());
+  });
+}
+
+async function installAdminApp() {
+  if (isAdminAppInstalled()) {
+    updateAdminInstallButtons();
+    return;
+  }
+  const promptEvent = window.gbrAdminInstallPrompt;
+  if (!promptEvent) {
+    window.alert("To install GBR Admin, open your browser menu and choose \"Install GBR Admin\" or \"Apps > Install this site as an app\".");
+    return;
+  }
+  window.gbrAdminInstallPrompt = null;
+  adminInstallButtons.forEach((button) => { button.disabled = true; });
+  try {
+    await promptEvent.prompt();
+    await promptEvent.userChoice;
+  } catch (error) {
+    console.warn("[Admin] Install prompt failed:", error);
+  } finally {
+    adminInstallButtons.forEach((button) => { button.disabled = false; });
+  }
+}
+
+window.addEventListener("appinstalled", () => {
+  adminAppInstalled = true;
+  window.gbrAdminInstallPrompt = null;
+  updateAdminInstallButtons();
+});
+
+adminInstallButtons.forEach((button) => button.addEventListener("click", installAdminApp));
+if (adminStandaloneQuery.addEventListener) {
+  adminStandaloneQuery.addEventListener("change", updateAdminInstallButtons);
+} else if (adminStandaloneQuery.addListener) {
+  adminStandaloneQuery.addListener(updateAdminInstallButtons);
+}
+updateAdminInstallButtons();
 
 // -------------------------------------------------------------------
 // Tabs

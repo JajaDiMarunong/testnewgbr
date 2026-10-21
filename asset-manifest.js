@@ -3,7 +3,7 @@
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
   "./asset-manifest.js", "./sw.js", "./guestbook.html", "./guestbook.css",
-  "./guestbook.js", "./admin.html", "./admin.css", "./admin.js",
+  "./guestbook.js", "./admin.html", "./admin-manifest.webmanifest", "./admin.css", "./admin.js",
   "./assets/background.jpg", "./assets/logo.png", "./assets/icon-192.png",
   "./assets/crisanto-marker.jpg",
   "./assets/mcarthurmarker.jpg",
