@@ -1364,42 +1364,94 @@ function setEditingMode(mode) {
 noteTabs.forEach((tab) => tab.addEventListener("click", () => setEditingMode(tab.dataset.mode)));
 
 // -------------------------------------------------------------------
-// Photo notes: reuse MindAR's already-running camera feed
+// Photo notes: dedicated camera stream
 // -------------------------------------------------------------------
-function findArVideoElement() {
-  return document.querySelector("#ar-container video");
+let noteCameraStream = null;
+let noteCameraRequestToken = 0;
+
+function showNoteCameraError(error) {
+  let message = "Couldn't start the camera. Check your browser's camera permission and try again.";
+  if (!navigator.mediaDevices?.getUserMedia) {
+    message = "Camera access isn't available here. Open the site over HTTPS and try again.";
+  } else if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+    message = "Camera access was blocked. Allow camera access for this site in your browser settings, then try again.";
+  } else if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
+    message = "No camera was found on this device.";
+  } else if (error?.name === "NotReadableError" || error?.name === "TrackStartError") {
+    message = "The camera is busy in another app. Close it and try again.";
+  }
+  notePhotoError.textContent = message;
+  notePhotoError.classList.remove("hidden");
+  notePhotoPreview.classList.add("hidden");
+  btnSnapPhoto.disabled = true;
 }
 
-function startPhotoPreview() {
-  const arVideo = findArVideoElement();
-  if (!arVideo || !arVideo.srcObject) {
-    notePhotoError.classList.remove("hidden");
-    notePhotoPreview.classList.add("hidden");
-    btnSnapPhoto.disabled = true;
+async function startPhotoPreview() {
+  const requestToken = ++noteCameraRequestToken;
+  notePhotoError.classList.add("hidden");
+  btnSnapPhoto.disabled = true;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showNoteCameraError();
     return;
   }
-  notePhotoError.classList.add("hidden");
-  btnSnapPhoto.disabled = false;
-  notePhotoPreview.srcObject = arVideo.srcObject;
-  notePhotoPreview.classList.remove("hidden");
-  notePhotoResult.classList.add("hidden");
-  notePhotoPreview.play().catch(() => {});
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+
+    if (
+      requestToken !== noteCameraRequestToken ||
+      editingMode !== "photo" ||
+      noteEditorModal.classList.contains("hidden")
+    ) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    noteCameraStream = stream;
+    notePhotoPreview.srcObject = stream;
+    notePhotoPreview.classList.remove("hidden");
+    notePhotoResult.classList.add("hidden");
+    await notePhotoPreview.play().catch(() => {});
+    btnSnapPhoto.disabled = notePhotoPreview.videoWidth === 0;
+  } catch (error) {
+    if (requestToken === noteCameraRequestToken) showNoteCameraError(error);
+  }
 }
 
 function stopPhotoPreview() {
+  noteCameraRequestToken++;
   notePhotoPreview.srcObject = null;
+  if (noteCameraStream) {
+    noteCameraStream.getTracks().forEach((track) => track.stop());
+    noteCameraStream = null;
+  }
+  btnSnapPhoto.disabled = true;
 }
 
+notePhotoPreview.addEventListener("loadedmetadata", () => {
+  if (editingMode === "photo" && noteCameraStream) btnSnapPhoto.disabled = false;
+});
+
 btnSnapPhoto.addEventListener("click", () => {
-  const arVideo = findArVideoElement();
-  if (!arVideo) return;
+  if (!noteCameraStream || !notePhotoPreview.videoWidth) return;
 
   const maxDim = 480;
-  const scale = Math.min(1, maxDim / Math.max(arVideo.videoWidth, arVideo.videoHeight));
+  const scale = Math.min(
+    1,
+    maxDim / Math.max(notePhotoPreview.videoWidth, notePhotoPreview.videoHeight)
+  );
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(arVideo.videoWidth * scale);
-  canvas.height = Math.round(arVideo.videoHeight * scale);
-  canvas.getContext("2d").drawImage(arVideo, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.round(notePhotoPreview.videoWidth * scale);
+  canvas.height = Math.round(notePhotoPreview.videoHeight * scale);
+  canvas.getContext("2d").drawImage(notePhotoPreview, 0, 0, canvas.width, canvas.height);
   capturedPhotoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
   notePhotoResult.src = capturedPhotoDataUrl;

@@ -355,7 +355,7 @@
           <video id="note-photo-preview" autoplay playsinline muted></video>
           <img id="note-photo-result" class="hidden" alt="Captured photo" />
         </div>
-        <p id="note-photo-error" class="admin-error hidden">Camera preview isn't available right now — try opening AR Camera once first, then come back here.</p>
+        <p id="note-photo-error" class="admin-error hidden">Couldn't open the camera. Check your browser's camera permission and try again.</p>
         <div class="note-photo-controls">
           <button id="btn-snap-photo" class="btn-secondary btn-small">📸 Snap Photo</button>
           <button id="btn-retake-photo" class="btn-secondary btn-small hidden">Retake</button>
@@ -466,6 +466,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=37" defer></script>
+  <script src="app.js?v=38" defer></script>
 </body>
 </html>
