@@ -47,7 +47,10 @@ self.addEventListener("fetch", (event) => {
     const cached = await caches.match(event.request);
     if (cached) return addSecurityHeaders(cached);
     try {
-      const response = await fetch(event.request);
+      const controller = new AbortController();
+      const timeoutMs = event.request.destination === "document" ? 4000 : 6000;
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch(event.request, { signal: controller.signal }).finally(() => clearTimeout(timer));
       if (response && (response.ok || response.type === "opaque")) {
         const cache = await caches.open(DATA_CACHE);
         const securedResponse = addSecurityHeaders(response);

@@ -1774,7 +1774,10 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
   if (!art.modelObj) return null;
 
   let modelEl = document.getElementById(`model-${targetIndex}`);
-  if (modelEl) return modelEl;
+  if (modelEl) {
+    modelEl.setAttribute("visible", "true");
+    return modelEl;
+  }
 
   modelEl = document.createElement("a-entity");
   modelEl.setAttribute("id", `model-${targetIndex}`);
@@ -1794,18 +1797,34 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
   modelEl.setAttribute("position", `0 0 ${art.modelPositionZ ?? 0.1}`);
   modelEl.setAttribute("rotation", art.markerRotation || "0 0 0");
   modelEl.setAttribute("scale", `${art.baseScale} ${art.baseScale} ${art.baseScale}`);
-  modelEl.addEventListener("model-error", (e) =>
-    console.error(`"${art.name}" model failed to load:`, e.detail)
-  );
+
+  modelEl.addEventListener("model-loaded", () => {
+    if (activeModelEl === modelEl) {
+      scanHint.textContent = "Pinch to zoom · Drag to rotate";
+    }
+  });
+
+  modelEl.addEventListener("model-error", (e) => {
+    console.warn(`[AR] "${art.name}" model unavailable offline or failed to load:`, e.detail);
+    if (activeModelEl === modelEl) {
+      scanHint.textContent = "Artwork Scanned! (3D model offline)";
+    }
+  });
+
   targetEl.appendChild(modelEl);
   return modelEl;
 }
 
 function handleTargetFound(art, targetIndex, targetEl) {
-  scanHint.textContent = "Pinch to zoom · Drag to rotate";
-  scanHint.classList.add("found");
-
   const modelEl = getOrCreateModelEntity(art, targetIndex, targetEl);
+
+  if (art.modelObj) {
+    const hasMesh = modelEl?.getObject3D("mesh");
+    scanHint.textContent = hasMesh ? "Pinch to zoom · Drag to rotate" : "Artwork Scanned! Loading 3D model…";
+  } else {
+    scanHint.textContent = "Artwork Scanned!";
+  }
+  scanHint.classList.add("found");
 
   activeModelEl = modelEl;
   activeBaseScale = art.baseScale;
@@ -1832,10 +1851,10 @@ function handleTargetLost(targetIndex) {
   scanHint.textContent = "Point your camera at an artwork";
   scanHint.classList.remove("found");
 
+  // Keep the model in memory to avoid costly re-fetching over slow/flaky signal; simply hide it
   const modelEl = document.getElementById(`model-${targetIndex}`);
   if (modelEl) {
-    disposeModel(modelEl);
-    modelEl.remove();
+    modelEl.setAttribute("visible", "false");
   }
 
   if (activeModelEl && activeModelEl.id === `model-${targetIndex}`) {
@@ -1858,6 +1877,59 @@ function checkCollectionComplete() {
 // -------------------------------------------------------------------
 // Build AR scene
 // -------------------------------------------------------------------
+let cachedMindBlobUrl = null;
+let cachedMindBlobSrc = null;
+
+async function resolveMindTargetBlobUrl(src) {
+  if (typeof src === "string" && src.startsWith("blob:")) {
+    return src;
+  }
+  if (cachedMindBlobSrc === src && cachedMindBlobUrl) {
+    return cachedMindBlobUrl;
+  }
+
+  // 1. Try CacheStorage first (instant read from device cache/disk)
+  if (window.caches) {
+    try {
+      const match = await caches.match(src);
+      if (match) {
+        const blob = await match.blob();
+        if (blob && blob.size > 0) {
+          cachedMindBlobSrc = src;
+          cachedMindBlobUrl = URL.createObjectURL(blob);
+          return cachedMindBlobUrl;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 2. Fast network fetch with 1200ms timeout
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch(src, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const clone = res.clone();
+      if (window.caches) {
+        caches.open("gbr-museum-assets-v10").then((c) => c.put(src, clone)).catch(() => {});
+      }
+      const blob = await res.blob();
+      cachedMindBlobSrc = src;
+      cachedMindBlobUrl = URL.createObjectURL(blob);
+      return cachedMindBlobUrl;
+    }
+  } catch (_) {}
+
+  // 3. Fallback to built-in ./assets/targets.mind if src was a remote or dynamic URL
+  if (src !== "./assets/targets.mind") {
+    console.warn("[initAR] Custom target bundle failed or timed out, falling back to built-in targets.mind");
+    return resolveMindTargetBlobUrl("./assets/targets.mind");
+  }
+
+  return src;
+}
+
 async function initAR() {
   console.log("[initAR] Starting AR initialization");
   const bundledTargetIds = new Set(BUILTIN_ARTWORKS.filter((a) => a.markerImage).map((a) => a.id));
@@ -1879,16 +1951,8 @@ async function initAR() {
     console.warn("Could not load published AR bundle:", error);
   }
 
-  console.log("[initAR] Fetching target bundle:", imageTargetSrc);
-  const targetResponse = await fetch(imageTargetSrc).catch((err) => {
-    console.error("[initAR] Target fetch failed:", err);
-    return null;
-  });
-  if (!targetResponse?.ok) {
-    console.error("[initAR] No usable AR target bundle, response:", targetResponse);
-    throw new Error("No usable AR target bundle is available.");
-  }
-  console.log("[initAR] Target bundle fetched successfully");
+  // Resolve target to an in-memory blob URL immediately (0ms network delay for MindAR)
+  const targetBlobUrl = await resolveMindTargetBlobUrl(imageTargetSrc);
 
   const targetEntities = scannable
     .map((art, i) => `<a-entity id="ar-target-${i}" mindar-image-target="targetIndex: ${i}"></a-entity>`)
@@ -1897,7 +1961,7 @@ async function initAR() {
   arContainer.innerHTML = `
     <a-scene
       id="ar-scene"
-      mindar-image="imageTargetSrc: ${imageTargetSrc}; maxTrack: ${scannable.length}; filterMinCF: 0.001; filterBeta: 1000; missTolerance: 20; warmupTolerance: 2; uiLoading: no; uiScanning: no; uiError: no;"
+      mindar-image="imageTargetSrc: ${targetBlobUrl}; maxTrack: ${scannable.length}; filterMinCF: 0.001; filterBeta: 1000; missTolerance: 20; warmupTolerance: 2; uiLoading: no; uiScanning: no; uiError: no;"
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: false"
@@ -1925,30 +1989,25 @@ async function initAR() {
     if (renderStartFired) return;
     renderStartFired = true;
     console.log("[initAR] Hiding loading screen");
-    setTimeout(() => loadingScreen.classList.add("hidden"), 300);
+    loadingScreen.classList.add("hidden");
   };
   arScene.addEventListener("renderstart", hideLoading);
   arScene.addEventListener("error", (e) => {
     console.error("[initAR] MindAR scene error:", e);
     hideLoading();
   });
-  // Also listen on window for any unhandled errors during MindAR init
-  const errorHandler = (e) => {
-    console.error("[initAR] Window error during AR init:", e);
-    hideLoading();
-  };
-  window.addEventListener("error", errorHandler);
-  setTimeout(() => {
-    window.removeEventListener("error", errorHandler);
-    hideLoading();
-  }, 15000);
+
+  // Fast failsafe: MindAR takes ~300-800ms to fire renderstart.
+  // If it takes longer than 2.5s on a weak device, hide loading overlay anyway so camera isn't obstructed
+  setTimeout(hideLoading, 2500);
 
   scannable.forEach((art, i) => {
     const targetEl = document.getElementById(`ar-target-${i}`);
     targetEl?.addEventListener("targetFound", () => handleTargetFound(art, i, targetEl));
     targetEl?.addEventListener("targetLost", () => handleTargetLost(i));
   });
-console.log("[initAR] AR initialization complete, waiting for renderstart...");
+
+  console.log("[initAR] AR initialization complete, waiting for renderstart...");
 }
 
 // -------------------------------------------------------------------
@@ -1996,29 +2055,64 @@ async function loadPublishedArBundle() {
   let savedManifest = null;
   try { savedManifest = JSON.parse(localStorage.getItem(AR_BUNDLE_CACHE_KEY) || "null"); } catch (_) {}
   let manifest = savedManifest;
-  try {
-    const response = await fetch(`${FIREBASE_URL}/arBundleCurrent.json`);
-    if (response.ok) {
-      const current = await response.json();
-      if (current?.mindUrl && current?.targets?.length) manifest = current;
+
+  // Fast check: if online, try fetching updated bundle metadata with a short 1000ms timeout
+  if (navigator.onLine) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1000);
+      const response = await fetch(`${FIREBASE_URL}/arBundleCurrent.json`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (response.ok) {
+        const current = await response.json();
+        if (current?.mindUrl && current?.targets?.length) {
+          manifest = current;
+        }
+      }
+    } catch (_) {
+      // Network slow or timed out: fall back immediately to savedManifest without waiting
     }
-  } catch (_) {}
+  }
+
   if (!manifest?.mindUrl || !manifest?.targets?.length) return null;
 
   const cache = window.caches ? await caches.open("gbr-museum-ar-bundles-v1") : null;
   const candidateUrl = manifest.mindUrl;
   let response = null;
-  try {
-    response = await fetch(candidateUrl, { cache: "no-store" });
-    if (response.ok && cache) await cache.put(candidateUrl, response.clone());
-  } catch (_) {}
-  if ((!response || !response.ok) && cache) response = await cache.match(candidateUrl);
-  if ((!response || !response.ok) && savedManifest && savedManifest.mindUrl !== candidateUrl) {
-    manifest = savedManifest;
-    try { response = await fetch(manifest.mindUrl, { cache: "no-store" }); } catch (_) {}
-    if ((!response || !response.ok) && cache) response = await cache.match(manifest.mindUrl);
+
+  // 1. Check local cache FIRST (instant, no network roundtrip)
+  if (cache) {
+    try {
+      response = await cache.match(candidateUrl);
+    } catch (_) {}
   }
+
+  // 2. If not yet in cache and online, attempt fast network download (1800ms max)
+  if (!response || !response.ok) {
+    if (navigator.onLine) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 1800);
+        const fetchRes = await fetch(candidateUrl, { signal: controller.signal });
+        clearTimeout(timer);
+        if (fetchRes.ok && cache) {
+          await cache.put(candidateUrl, fetchRes.clone());
+          response = fetchRes;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 3. Fall back to previous savedManifest mindUrl if candidate failed
+  if ((!response || !response.ok) && savedManifest && savedManifest.mindUrl !== candidateUrl && cache) {
+    try {
+      response = await cache.match(savedManifest.mindUrl);
+      if (response?.ok) manifest = savedManifest;
+    } catch (_) {}
+  }
+
   if (!response?.ok) return null;
+
   localStorage.setItem(AR_BUNDLE_CACHE_KEY, JSON.stringify(manifest));
   manifest.mindUrl = URL.createObjectURL(await response.blob());
   return manifest;
@@ -2034,7 +2128,16 @@ async function initArtworks() {
   // Fetch uploaded artworks from Firebase
   try {
     const user = firebase.auth().currentUser;
-    const authParam = user ? `?auth=${await user.getIdToken()}` : "";
+    let authParam = "";
+    if (user) {
+      try {
+        const token = await Promise.race([
+          user.getIdToken(false),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Token timeout")), 600))
+        ]);
+        if (token) authParam = `?auth=${token}`;
+      } catch (_) {}
+    }
     const res = await fetch(`${FIREBASE_URL}/artworks.json${authParam}`);
     if (res.ok) {
       const data = await res.json();

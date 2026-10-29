@@ -100,10 +100,20 @@
     await cacheJson(collection, data);
   }
 
+  function timeoutFetch(url, init = {}, timeoutMs = 2000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error("Network timeout")), timeoutMs);
+    const signal = init.signal || controller.signal;
+    return nativeFetch(url, { ...init, signal }).finally(() => clearTimeout(timer));
+  }
+
   async function getAuthToken() {
     if (typeof firebase !== "undefined" && firebase.auth?.currentUser) {
       try {
-        return await firebase.auth().currentUser.getIdToken();
+        // Pass false so it uses the cached token without forcing a network refresh
+        const tokenPromise = firebase.auth().currentUser.getIdToken(false);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 800));
+        return await Promise.race([tokenPromise, timeoutPromise]);
       } catch (_) {}
     }
     return null;
@@ -140,7 +150,7 @@
         if (token && url.includes("firebasedatabase.app")) {
           url = `${url}${url.includes("?") ? "&" : "?"}auth=${token}`;
         }
-        const response = await nativeFetch(url, { method: entry.method, headers: entry.headers, body: entry.body });
+        const response = await timeoutFetch(url, { method: entry.method, headers: entry.headers, body: entry.body }, 4000);
         if (!response.ok) break;
         await remove(QUEUE_STORE, entry.id);
       } catch (_) { break; }
@@ -151,19 +161,46 @@
     const url = typeof input === "string" ? input : input.url;
     const method = (init.method || (typeof input !== "string" && input.method) || "GET").toUpperCase();
     if (!firebaseUrl(url)) return nativeFetch(input, init);
+
     if (method === "GET") {
+      // 1. Instant offline check
+      if (!navigator.onLine) {
+        const offlineData = await cachedJson(url);
+        if (offlineData !== undefined) {
+          return new Response(JSON.stringify(offlineData), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "X-Museum-Offline": "true" }
+          });
+        }
+      }
+
+      // 2. Check local IndexedDB cache
+      const cached = await cachedJson(url);
+
+      // 3. Fast timeout: If we already have cached data, don't stall the user!
+      // Only wait 1200ms for network; if slow or stalling, immediately return cached data.
+      const timeoutMs = cached !== undefined ? 1200 : 3000;
+
       try {
         const token = await getAuthToken();
         const authUrl = token && url.includes("firebasedatabase.app") ? `${url}${url.includes("?") ? "&" : "?"}auth=${token}` : url;
-        const response = await nativeFetch(authUrl, init);
-        if (response.ok) cacheJson(url, await response.clone().json()).catch(() => {});
+        const response = await timeoutFetch(authUrl, init, timeoutMs);
+        if (response.ok) {
+          cacheJson(url, await response.clone().json()).catch(() => {});
+        }
         return response;
       } catch (error) {
-        const data = await cachedJson(url);
-        if (data !== undefined) return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json", "X-Museum-Offline": "true" } });
+        if (cached !== undefined) {
+          console.warn("[offline-store] Network slow or timed out, returning cached data for:", url);
+          return new Response(JSON.stringify(cached), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "X-Museum-Offline": "true" }
+          });
+        }
         throw error;
       }
     }
+
     if (!navigator.onLine) {
       if (isEphemeral(url)) return new Response(null, { status: 202 });
       await enqueue(url, init);
@@ -172,7 +209,7 @@
     try {
       const token = await getAuthToken();
       const authUrl = token && url.includes("firebasedatabase.app") ? `${url}${url.includes("?") ? "&" : "?"}auth=${token}` : url;
-      return await nativeFetch(authUrl, init);
+      return await timeoutFetch(authUrl, init, 3000);
     } catch (_) {
       if (isEphemeral(url)) return new Response(null, { status: 202 });
       await enqueue(url, init);
@@ -189,13 +226,16 @@
       const request = new Request(asset, { mode: asset.startsWith("http") ? "no-cors" : "same-origin" });
       try {
         if (!(await cache.match(request))) {
-          const response = await nativeFetch(request);
+          if (!navigator.onLine) throw new Error("offline");
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const response = await nativeFetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
           if (!response || (!response.ok && response.type !== "opaque")) throw new Error("download failed");
           await cache.put(request, response.clone());
         }
       } catch (error) {
         failed++;
-        console.warn("Offline asset was not cached:", asset, error);
+        console.warn("Offline asset skipped or not cached:", asset, error);
       }
       completed++;
       onProgress?.({ completed, total: assets.length, failed, asset });
