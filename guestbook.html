@@ -12,7 +12,6 @@
 <body>
 
   <div class="tv-frame">
-    <!-- Header Bar -->
     <header class="tv-header">
       <div class="tv-brand">
         <span class="tv-logo">🏛️</span>
@@ -34,9 +33,7 @@
       </div>
     </header>
 
-    <!-- Main Content -->
     <div class="tv-layout">
-      <!-- LEFT: Guestbook Board -->
       <div class="tv-board-section">
         <div class="tv-section-label">
           <span>📝 Guestbook Board</span>
@@ -47,14 +44,12 @@
         </div>
       </div>
 
-      <!-- RIGHT: Leaderboard -->
       <div class="tv-sidebar">
         <div class="tv-section-label">🏆 Fastest Completions</div>
         <div id="leaderboard-list" class="tv-leaderboard"></div>
       </div>
     </div>
 
-    <!-- Footer Ticker -->
     <div class="tv-ticker">
       <div class="ticker-content" id="ticker-text">
         Welcome to the GBR Jr. Museum! Scan artworks with your phone to unlock their stories. Unlock every artwork to leave a note on the guestbook board!
@@ -62,7 +57,6 @@
     </div>
   </div>
 
-  <!-- Note View Modal -->
   <div id="note-view-modal" class="modal-overlay hidden">
     <div class="modal-card tv-modal-card">
       <div id="note-view-content" class="note-view-content"></div>
@@ -71,12 +65,10 @@
     </div>
   </div>
 
-<!-- Firebase SDK (load first, no defer) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
-  <!-- Initialize Firebase -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",

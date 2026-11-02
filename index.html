@@ -45,18 +45,13 @@
 </head>
 <body>
 
-  <!-- AR base layer: injected by app.js -->
   <div id="ar-container"></div>
 
-  <!-- Shared background layer -->
   <div id="home-bg-layer" class="home-bg-layer">
     <img id="home-bg-img" src="" alt="" />
     <div class="home-bg-overlay"></div>
   </div>
 
-  <!-- ============================================================
-       USERNAME PROMPT
-       ============================================================ -->
   <div id="screen-username" class="modal-overlay">
     <div class="modal-card">
       <p class="modal-eyebrow">Welcome</p>
@@ -67,9 +62,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       ONBOARDING TOUR
-       ============================================================ -->
   <div id="tour-overlay" class="tour-overlay hidden">
     <div class="tour-card" id="tour-card">
       <div class="tour-header">
@@ -87,9 +79,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       HOME SCREEN
-       ============================================================ -->
   <section id="screen-home" class="screen hidden">
     <div class="corner-fabs corner-fabs-left">
       <button id="btn-open-badges" class="fab-btn">🏅</button>
@@ -127,9 +116,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       SCANNER SCREEN
-       ============================================================ -->
   <section id="screen-scanner" class="screen hidden">
     <div class="scanner-topbar">
       <button id="btn-back-home" class="btn-icon">⌂ Home</button>
@@ -145,9 +131,6 @@
     <div id="scan-hint" class="scan-hint">Point your camera at an artwork</div>
   </section>
 
-  <!-- ============================================================
-       ARTWORK DETAIL SCREEN
-       ============================================================ -->
   <section id="screen-detail" class="screen hidden">
     <div class="detail-topbar">
       <button id="btn-detail-back" class="btn-icon">← Back</button>
@@ -165,9 +148,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       LIBRARY SCREEN
-       ============================================================ -->
   <section id="screen-library" class="screen hidden">
     <div class="detail-topbar">
       <button id="btn-library-back" class="btn-icon">← Back</button>
@@ -182,9 +162,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       SETTINGS SCREEN
-       ============================================================ -->
   <section id="screen-settings" class="screen hidden">
     <div class="detail-topbar">
       <button id="btn-settings-back" class="btn-icon">← Back</button>
@@ -213,9 +190,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       BADGES SCREEN
-       ============================================================ -->
   <section id="screen-badges" class="screen hidden">
     <div class="detail-topbar">
       <button id="btn-badges-back" class="btn-icon">← Back</button>
@@ -230,9 +204,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       LEADERBOARD SCREEN
-       ============================================================ -->
   <section id="screen-leaderboard" class="screen hidden">
     <div class="detail-topbar">
       <h2 class="leaderboard-title">Leaderboard</h2>
@@ -265,9 +236,6 @@
     </div>
   </section>
 
-  <!-- ============================================================
-       IMMERSIVE AR SCREEN (markerless, inside skybox)
-       ============================================================ -->
   <section id="screen-immersive" class="screen hidden">
     <div class="immersive-topbar">
       <button id="btn-immersive-back" class="btn-icon">← Exit Immersive</button>
@@ -275,9 +243,6 @@
     <div id="immersive-container"></div>
   </section>
 
-  <!-- ============================================================
-       BOTTOM NAVIGATION
-       ============================================================ -->
   <nav id="bottom-nav" class="bottom-nav hidden">
     <button class="nav-btn active" data-tab="home">
       <span class="nav-icon">🖼️</span><span class="nav-label">Artworks</span>
@@ -290,9 +255,6 @@
     </button>
   </nav>
 
-  <!-- ============================================================
-       LIBRARY DETAIL POPUP
-       ============================================================ -->
   <div id="library-detail-modal" class="modal-overlay hidden">
     <div class="modal-card library-detail-card">
       <div class="library-detail-scroll">
@@ -330,9 +292,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       NOTE EDITOR MODAL
-       ============================================================ -->
   <div id="note-editor-modal" class="modal-overlay hidden">
     <div class="modal-card note-editor-card">
       <p id="note-editor-eyebrow" class="modal-eyebrow">Your Notepad</p>
@@ -373,9 +332,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       NOTE VIEW MODAL
-       ============================================================ -->
   <div id="note-view-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <div id="note-view-content" class="note-view-content"></div>
@@ -386,9 +342,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       KUYA DAVON — AI CHAT HEAD
-       ============================================================ -->
   <button id="chat-head-btn" class="chat-head-btn hidden" type="button" aria-label="Open AI museum guide" title="Open AI museum guide">💬</button>
 
   <div id="chat-panel" class="chat-panel hidden">
@@ -406,9 +359,6 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       UNLOCK CELEBRATION MODAL
-       ============================================================ -->
   <div id="unlock-modal" class="modal-overlay hidden">
     <div class="modal-card unlock-card">
       <div id="unlock-badge" class="modal-badge">✓</div>
@@ -424,17 +374,11 @@
 
   <div id="unlock-confetti" class="unlock-confetti" aria-hidden="true"></div>
 
-  <!-- ============================================================
-       BADGE EARNED TOAST
-       ============================================================ -->
   <div id="badge-toast" class="badge-toast hidden">
     <span id="badge-toast-icon">🏅</span>
     <span id="badge-toast-text">Badge earned!</span>
   </div>
 
-  <!-- ============================================================
-       LOADING / PERMISSION STATES
-       ============================================================ -->
 <div id="loading-screen" class="loading-screen">
   <img id="loading-logo" src="./assets/logo.png" alt="GBR Museum" />
   <div class="loading-progress" role="progressbar" aria-label="Downloading museum for offline use" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -449,12 +393,10 @@
     <button id="btn-retry-camera" class="btn-primary">Retry</button>
   </div>
 
-  <!-- Firebase SDK (load first, no defer) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
-  <!-- Initialize Firebase -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",
