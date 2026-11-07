@@ -403,6 +403,12 @@ button.corner-fabs-right {
   background: var(--frame-gold); color: #201a10; font-size: 24px;
   border: none; box-shadow: 0 6px 16px rgba(0,0,0,0.4); cursor: grab;
   touch-action: none; user-select: none;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.chat-head-img {
+  width: 32px; height: 32px; object-fit: contain; pointer-events: none;
+  display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
 }
 .chat-head-btn.dragging { cursor: grabbing; }
 .chat-head-btn.hidden { display: none; }
@@ -734,8 +740,83 @@ button.corner-fabs-right {
   min-height: var(--nav-height);
 }
 .nav-btn.active { color: var(--frame-gold); }
-.nav-icon { font-size: 20px; }
+.nav-icon {
+  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+.nav-icon-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  pointer-events: none;
+  filter: grayscale(0.2) opacity(0.85);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
+}
+.nav-btn.active .nav-icon-img {
+  filter: none;
+  transform: scale(1.12);
+}
 .nav-label { font-size: 10.5px; font-weight: 600; }
+
+.fab-icon-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+}
+
+.badge-toast-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.tour-illo-img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.badge-card-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.modal-badge-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.eyebrow-icon-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.section-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: middle;
+  display: inline-block;
+  margin-right: 4px;
+}
 
 /* ---------------- unlock modal / username / badge toast ---------------- */
 .modal-overlay {

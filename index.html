@@ -68,7 +68,9 @@
         <span class="tour-step-count" id="tour-step-count">1 / 7</span>
         <button id="btn-tour-skip" class="tour-skip">Skip</button>
       </div>
-      <div class="tour-illustration" id="tour-illustration">🖼️</div>
+      <div class="tour-illustration" id="tour-illustration">
+        <img src="./assets/icons/artwork.png" alt="" class="tour-illo-img" />
+      </div>
       <h3 id="tour-title">Welcome</h3>
       <p id="tour-text" class="tour-text">...</p>
       <div class="tour-dots" id="tour-dots"></div>
@@ -81,8 +83,10 @@
 
   <section id="screen-home" class="screen hidden">
     <div class="corner-fabs corner-fabs-left">
-      <button id="btn-open-badges" class="fab-btn">🏅</button>
-      <button id="btn-open-library" class="fab-btn">📖</button>
+      <button id="btn-open-badges" class="fab-btn" aria-label="Badges" title="Badges">
+        <img src="./assets/icons/badge.png" alt="Badges" class="fab-icon-img" />
+      </button>
+      <button id="btn-open-library" class="fab-btn" aria-label="Artwork Library" title="Artwork Library">📖</button>
     </div>
     <button id="btn-open-settings" class="fab-btn corner-fabs-right">⚙️</button>
 
@@ -196,7 +200,7 @@
     </div>
     <div class="detail-scroll">
       <div class="detail-body">
-        <p class="eyebrow">Your Progress</p>
+        <p class="eyebrow" style="display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/badge.png" alt="" class="eyebrow-icon-img" /> Your Progress</p>
         <h2>Badges</h2>
         <p class="detail-text">Complete actions around the gallery to earn badges. Collect them all to unlock the guestbook on the Leaderboard tab.</p>
         <div id="badges-grid" class="badges-grid"></div>
@@ -211,7 +215,7 @@
     <div class="leaderboard-split">
       <div class="leaderboard-half">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <p class="eyebrow" style="margin:0;">Fastest Completions</p>
+          <p class="eyebrow" style="margin:0;display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/leaderboard.png" alt="" class="eyebrow-icon-img" /> Fastest Completions</p>
           <a href="guestbook.html" class="btn-tiny" style="text-decoration:none;display:inline-flex;align-items:center;">📋 Full View →</a>
         </div>
         <div id="leaderboard-list" class="leaderboard-list">
@@ -245,13 +249,13 @@
 
   <nav id="bottom-nav" class="bottom-nav hidden">
     <button class="nav-btn active" data-tab="home">
-      <span class="nav-icon">🖼️</span><span class="nav-label">Artworks</span>
+      <span class="nav-icon"><img src="./assets/icons/artwork.png" alt="Artworks" class="nav-icon-img" /></span><span class="nav-label">Artworks</span>
     </button>
     <button class="nav-btn" data-tab="scanner">
-      <span class="nav-icon">📷</span><span class="nav-label">AR Camera</span>
+      <span class="nav-icon"><img src="./assets/icons/arcamera.png" alt="AR Camera" class="nav-icon-img" /></span><span class="nav-label">AR Camera</span>
     </button>
     <button class="nav-btn" data-tab="leaderboard">
-      <span class="nav-icon">🏆</span><span class="nav-label">Leaderboard</span>
+      <span class="nav-icon"><img src="./assets/icons/leaderboard.png" alt="Leaderboard" class="nav-icon-img" /></span><span class="nav-label">Leaderboard</span>
     </button>
   </nav>
 
@@ -342,7 +346,9 @@
     </div>
   </div>
 
-  <button id="chat-head-btn" class="chat-head-btn hidden" type="button" aria-label="Open AI museum guide" title="Open AI museum guide">💬</button>
+  <button id="chat-head-btn" class="chat-head-btn hidden" type="button" aria-label="Open AI museum guide" title="Open AI museum guide">
+    <img src="./assets/icons/aichat.png" alt="Kuya Davon AI Guide" class="chat-head-img" />
+  </button>
 
   <div id="chat-panel" class="chat-panel hidden">
     <div class="chat-panel-header">
@@ -375,7 +381,7 @@
   <div id="unlock-confetti" class="unlock-confetti" aria-hidden="true"></div>
 
   <div id="badge-toast" class="badge-toast hidden">
-    <span id="badge-toast-icon">🏅</span>
+    <span id="badge-toast-icon"><img src="./assets/icons/badge.png" alt="Badge" class="badge-toast-img" /></span>
     <span id="badge-toast-text">Badge earned!</span>
   </div>
 

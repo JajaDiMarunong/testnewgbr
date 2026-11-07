@@ -80,21 +80,21 @@ const badges = {
     id: "firstScan",
     name: "First Scan",
     description: "Scan your very first artwork",
-    icon: "🔍",
+    icon: "./assets/icons/arcamera.png",
     earned: false,
   },
   allUnlocked: {
     id: "allUnlocked",
     name: "All Unlocked",
     description: "Unlock every artwork in the collection",
-    icon: "🔓",
+    icon: "./assets/icons/artwork.png",
     earned: false,
   },
   allBadges: {
     id: "allBadges",
     name: "All Badges",
     description: "Collect every other badge",
-    icon: "👑",
+    icon: "./assets/icons/badge.png",
     earned: false,
   },
 };
@@ -620,7 +620,7 @@ function showUnlockModal(art, wasAlreadyUnlocked) {
 
   const firstUnlock = art.showInMainCollection !== false && !wasAlreadyUnlocked;
   unlockEyebrow.textContent = firstUnlock ? "Artwork Unlocked" : "Artwork Scanned";
-  unlockBadge.textContent = firstUnlock ? "✓" : "📷";
+  unlockBadge.innerHTML = firstUnlock ? "✓" : '<img src="./assets/icons/arcamera.png" alt="Scanned" class="modal-badge-img" />';
   unlockBadge.classList.toggle("scanned", !firstUnlock);
 
   unlockModal.classList.remove("hidden");
@@ -667,7 +667,11 @@ btnViewCollection.addEventListener("click", () => {
 // -------------------------------------------------------------------
 let badgeToastTimer = null;
 function showBadgeToast(badge) {
-  badgeToastIcon.textContent = badge.icon;
+  if (badge.icon && badge.icon.startsWith("./assets/")) {
+    badgeToastIcon.innerHTML = `<img src="${badge.icon}" alt="${badge.name}" class="badge-toast-img" />`;
+  } else {
+    badgeToastIcon.innerHTML = `<img src="./assets/icons/badge.png" alt="Badge" class="badge-toast-img" />`;
+  }
   badgeToastText.textContent = `Badge earned: ${badge.name}`;
   badgeToast.classList.remove("hidden");
   clearTimeout(badgeToastTimer);
@@ -706,7 +710,11 @@ function renderBadges() {
     .map(
       (b, i) => `
     <div class="badge-card ${b.earned ? "earned" : ""} stagger-in" style="--i:${i}">
-      <div class="badge-icon">${b.earned ? b.icon : "🔒"}</div>
+      <div class="badge-icon">${
+        b.earned
+          ? (b.icon.startsWith("./assets/") ? `<img src="${b.icon}" alt="${b.name}" class="badge-card-img" />` : b.icon)
+          : "🔒"
+      }</div>
       <h4>${b.name}</h4>
       <p>${b.earned ? b.description : "Locked"}</p>
     </div>
@@ -2247,7 +2255,7 @@ startPresenceHeartbeat();
 const TOUR_STEPS = [
   {
     target: null,
-    illustration: "🖼️",
+    illustration: "./assets/icons/artwork.png",
     title: "Welcome to the GBR Museum!",
     text: "Your personal gallery awaits. Scan artworks with AR to unlock hidden stories and collect badges along the way.",
   },
@@ -2265,19 +2273,19 @@ const TOUR_STEPS = [
   },
   {
     target: ".progress-row",
-    illustration: "📊",
+    illustration: "./assets/icons/leaderboard.png",
     title: "Track Your Progress",
     text: "Watch your completion bar fill up as you unlock artworks. Complete them all to earn a spot on the leaderboard!",
   },
   {
     target: ".corner-fabs-left",
-    illustration: "🏅",
+    illustration: "./assets/icons/badge.png",
     title: "Badges & Library",
     text: "View your earned badges, browse the full artwork library (no camera needed), or change your display name anytime.",
   },
   {
     target: "#bottom-nav",
-    illustration: "📷",
+    illustration: "./assets/icons/arcamera.png",
     title: "AR Camera",
     text: "Tap the AR Camera tab to launch the scanner. Point your camera at any artwork to instantly unlock its story!",
   },
@@ -2324,7 +2332,11 @@ function showTourStep() {
   title.textContent = step.title;
   text.textContent = step.text;
   count.textContent = `${currentTourStep + 1} / ${TOUR_STEPS.length}`;
-  illo.textContent = step.illustration;
+  if (step.illustration && step.illustration.startsWith("./assets/")) {
+    illo.innerHTML = `<img src="${step.illustration}" alt="" class="tour-illo-img" />`;
+  } else {
+    illo.textContent = step.illustration;
+  }
 
   prevBtn.classList.toggle("hidden", currentTourStep === 0);
   nextBtn.textContent = currentTourStep === TOUR_STEPS.length - 1 ? "Get Started 🎉" : "Next →";

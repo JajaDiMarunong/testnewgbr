@@ -98,6 +98,10 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.12em;
   margin-bottom: 10px; padding: 0 4px;
 }
+.section-icon-img {
+  width: 22px; height: 22px; object-fit: contain;
+  vertical-align: middle; display: inline-block; margin-right: 6px;
+}
 .tv-refresh-hint {
   font-size: 12px; color: var(--text-dim); font-weight: 500;
   text-transform: none; letter-spacing: 0;
