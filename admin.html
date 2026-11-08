@@ -59,9 +59,10 @@
   <div id="ai-modal" class="modal-overlay hidden">
     <div class="modal-card ai-modal-card">
       <p class="modal-eyebrow">AI Assistant</p>
-      <h2>Auto-Fill Artwork Info &amp; Quiz</h2>
-      <p class="modal-desc">Paste any description, title, or notes about the artwork below. The AI will extract the title, artist, year, location, write a description, and generate quiz questions for you.</p>
-      <textarea id="ai-paste-input" class="note-textarea" rows="6" placeholder="Paste artwork info here… e.g. The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence, just before sunrise, with the addition of an imaginary village. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."></textarea>
+      <h2>Auto-Fill Collection Info &amp; Quiz</h2>
+      <p class="modal-desc">Paste any reference text below — an artwork, artifact, sculpture, document, monument, heritage structure, or historical site. The AI will extract the title, artist/maker, year, location, write a description, and generate quiz questions.</p>
+      <textarea id="ai-paste-input" class="note-textarea" rows="6" maxlength="4000" placeholder="Paste collection info here… e.g. The historic Puente de Malabon (Malabon Bridge) was constructed during the 19th century under the Spanish colonial administration to span the Malabon-Tullahan river network. During the Philippine-American War in 1899, one of its stone spans was deliberately destroyed by Filipino revolutionary forces. It was later rebuilt in reinforced concrete and steel."></textarea>
+      <p class="field-hint">Up to 4,000 characters. Works with artworks, artifacts, monuments, historical sites, and other collection objects.</p>
       <p id="ai-modal-status" class="ai-status"></p>
       <div class="modal-actions">
         <button id="btn-ai-cancel" class="btn-secondary">Cancel</button>
@@ -688,6 +689,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=10" defer></script>
+  <script src="admin.js?v=11" defer></script>
 </body>
 </html>

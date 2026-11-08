@@ -300,6 +300,27 @@ btnAiCancel.addEventListener("click", () => {
   aiModal.classList.add("hidden");
 });
 
+function buildAiMessages(text) {
+  const clean = text.slice(0, 4000).trim();
+  if (clean.length <= 280) return [{ role: "user", content: clean }];
+
+  const chunks = [];
+  let rest = clean;
+  while (rest && chunks.length < 20) {
+    if (rest.length <= 280) {
+      chunks.push(rest);
+      rest = "";
+      break;
+    }
+    let cut = rest.lastIndexOf(" ", 280);
+    if (cut < 180) cut = 280;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks[chunks.length - 1] += ` ${rest}`;
+  return chunks.map((content) => ({ role: "user", content }));
+}
+
 btnAiSubmit.addEventListener("click", async () => {
   const query = aiPasteInput.value.trim();
   if (!query) {
@@ -318,29 +339,30 @@ btnAiSubmit.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        messages: [{ role: "user", content: query }],
-        systemPrompt: `You are a museum cataloging assistant. The user pasted information about an artwork. Extract the following fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
+        messages: buildAiMessages(query),
+        systemPrompt: `You are a museum cataloging assistant. The user pasted reference text about ONE collection item. If the text arrives as several consecutive user messages, treat them as one continuous reference. It may be a painting, sculpture, artifact, document, monument, heritage structure, historical site, or any other museum object. Extract catalog fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
 
 CRITICAL RULES:
-1. Return ONLY the JSON object. No markdown, no explanations, no text before or after.
-2. The description must be 2-3 sentences maximum. Keep it short so the JSON fits in the response.
-3. quiz must be an array of 3 multiple-choice questions about the artwork. Each item must use this shape: {"question":"...","options":["...","...","...","..."],"correctIndex":0}. Every question must have exactly 4 options. correctIndex is the zero-based index of the correct option. Questions must be answerable from the supplied artwork information, and wrong options should be plausible.
-4. If a field cannot be determined, use null. BUT — infer intelligently:
-   - If no explicit title but the text centers on a specific person/figure/subject, use that subject's name as the title (e.g., "Portrait of [Name]" or just "[Name]")
-   - If the text describes a historical figure, use their name as the title
-   - If the text describes a specific artwork by name, use that name as the title
-   - Extract artist from phrases like "by [Name]", "painted by [Name]", "created by [Name]", "sculpted by [Name]"
-   - Extract year from any 4-digit year mentioned (1800-2025)
-   - Extract location from museum names, cities, countries mentioned
-5. The JSON must be complete and valid — do not cut it off. Keep wording concise so the full JSON fits.
-6. Use null ONLY when truly no information exists for that field. Never use null for quiz; always provide 3 questions.
+1. Return ONLY the JSON object. No markdown, no code fences, no explanations, no text before or after.
+2. Identify the PRIMARY subject of the text, not every person, place, or event mentioned. Use the item's own name as the title. If the name has an alias in parentheses, keep both, e.g. "Puente de Malabon (Malabon Bridge)".
+3. artist: use the creator, maker, painter, sculptor, architect, or engineer only when explicitly credited. For buildings, bridges, sites, monuments, and cultural objects with no named creator, use null. Never use a government, institution, army, or historical figure as the artist unless the text says they created the item.
+4. year: use the item's creation, construction, or completion period. Prefer the date it was made or built over unrelated event dates. Keep qualifiers such as "19th century", "c. 1899", or "Undated". If several dates appear, choose the one describing when the item was created.
+5. location: use the item's current location or the place where it was built or displayed, based only on the text. Do not invent a museum or city.
+6. description: 3-4 concise sentences (about 60-100 words). Summarize what the item is, its origin or period, and its historical significance. Do not copy the entire input.
+7. quiz: exactly 3 multiple-choice questions answerable only from the supplied text. Each item must use this shape: {"question":"...","options":["...","...","...","..."],"correctIndex":0}. Every question must have exactly 4 options. correctIndex is the zero-based index of the correct answer. Test different facts, and make wrong options plausible but clearly incorrect.
+8. Use null only when the information is truly absent. Never use null for quiz; always provide exactly 3 questions.
+9. If the text covers multiple objects, catalog the first or main item and ignore unrelated details.
+10. The JSON must be complete and valid. Keep wording concise so the full response fits.
 
 Examples:
 Input: "The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."
-Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was The Starry Night painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is The Starry Night permanently displayed?","options":["MoMA, New York","The Louvre, Paris","National Gallery, London","Prado Museum, Madrid"],"correctIndex":0}]}
+Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889 while he was at an asylum in Saint-Rémy-de-Provence. It is one of the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was The Starry Night painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is The Starry Night permanently displayed?","options":["MoMA, New York","The Louvre, Paris","National Gallery, London","Prado Museum, Madrid"],"correctIndex":0}]}
 
 Input: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal. Undated. Located at GBR Jr. Museum, General Trias, Philippines."
-Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.","quiz":[{"question":"Who painted the portrait of Crisanto de los Reyes y Mendoza?","options":["Rafael del Casal","Juan Luna","Felix Hidalgo","Fabian de la Rosa"],"correctIndex":0},{"question":"Where is this portrait located?","options":["GBR Jr. Museum, General Trias","National Museum, Manila","Ayala Museum, Makati","The Louvre, Paris"],"correctIndex":0},{"question":"What year is listed for this portrait?","options":["Undated","1889","1910","1930"],"correctIndex":0}]}`,
+Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.","quiz":[{"question":"Who painted the portrait of Crisanto de los Reyes y Mendoza?","options":["Rafael del Casal","Juan Luna","Felix Hidalgo","Fabian de la Rosa"],"correctIndex":0},{"question":"Where is this portrait located?","options":["GBR Jr. Museum, General Trias","National Museum, Manila","Ayala Museum, Makati","The Louvre, Paris"],"correctIndex":0},{"question":"What year is listed for this portrait?","options":["Undated","1889","1910","1930"],"correctIndex":0}]}
+
+Input: "The historic Puente de Malabon (Malabon Bridge) was constructed during the 19th century under the Spanish colonial administration to span the Malabon-Tullahan river network, serving as a commercial artery connecting Tambobong (modern-day Malabon) to trade routes into Manila. Built primarily of masonry and stone arches, it carried goods, livestock, and produce moved by river barges and land carriages. During the Philippine-American War in 1899, Filipino revolutionary forces deliberately blew out one of its stone spans to stall advancing American troops. It was later rebuilt in reinforced concrete and steel."
+Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th century","location":"Malabon, Philippines","description":"A 19th-century stone-arch bridge built under Spanish colonial rule to connect Tambobong, now Malabon, with trade routes into Manila. It was damaged during the Philippine-American War in 1899 when Filipino forces destroyed one of its stone spans. The bridge was later rebuilt with reinforced concrete and steel.","quiz":[{"question":"What was the bridge's primary purpose?","options":["Connecting trade routes to Manila","Serving as a military fortress","Irrigating nearby farms","Housing colonial offices"],"correctIndex":0},{"question":"During which conflict was one of its stone spans destroyed?","options":["Philippine-American War","World War II","Spanish-American War","Philippine Revolution"],"correctIndex":0},{"question":"What materials were used in its later rebuilds?","options":["Reinforced concrete and steel","Bamboo and timber","Marble and bronze","Adobe and coral stone"],"correctIndex":0}]}`,
         jsonMode: true,
       }),
     });

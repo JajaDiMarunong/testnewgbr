@@ -2542,8 +2542,6 @@ function startPresenceHeartbeat() {
   setInterval(sendHeartbeat, 20000);
 }
 
-recordVisit();
-startPresenceHeartbeat();
 // =====================================================================
 // ONBOARDING TOUR
 // =====================================================================
@@ -2837,6 +2835,8 @@ async function bootMuseum() {
       console.warn("[Auth] Anonymous sign-in failed:", err);
     }
 
+    recordVisit();
+    startPresenceHeartbeat();
     await initArtworks();
     restoreProgress();
     checkAllUnlockedBadge();
