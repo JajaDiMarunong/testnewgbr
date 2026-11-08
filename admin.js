@@ -301,25 +301,154 @@ btnAiCancel.addEventListener("click", () => {
   aiModal.classList.add("hidden");
 });
 
+// The proxy truncates each message to 4000 chars, so send the pasted reference
+// text as one user message. Splitting it into ~280-char turns (as this used to)
+// inflated the prompt and made the model treat the fragments as separate
+// requests, which is one reason it answered in prose instead of JSON.
 function buildAiMessages(text) {
   const clean = text.slice(0, 4000).trim();
-  if (clean.length <= 280) return [{ role: "user", content: clean }];
+  return clean ? [{ role: "user", content: clean }] : [];
+}
 
-  const chunks = [];
-  let rest = clean;
-  while (rest && chunks.length < 20) {
-    if (rest.length <= 280) {
-      chunks.push(rest);
-      rest = "";
-      break;
+// The Groq proxy substitutes a chat-style apology whenever the model returns no
+// content, and the failure arrives as HTTP 200. These values drive the retry
+// ladder further down so one bad generation no longer kills the whole fill.
+const AI_FILL_MAX_TOKENS = 2600;
+const AI_FILL_ATTEMPTS = 3;
+const AI_FILL_RETRY_DELAY = 700;
+
+function aiFillError(message, retryable) {
+  const err = new Error(message);
+  err.retryable = retryable !== false;
+  return err;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Turn whatever the model sent back into an object: bare JSON, fenced JSON,
+// JSON wrapped in prose, or JSON with trailing commas.
+function extractAiJson(text) {
+  if (!text || typeof text !== "string") return null;
+  let candidate = text.trim();
+  const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) candidate = fenced[1].trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  candidate = candidate.slice(start, end + 1);
+  try {
+    return JSON.parse(candidate);
+  } catch (err) {
+    try {
+      return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1"));
+    } catch (err2) {
+      return null;
     }
-    let cut = rest.lastIndexOf(" ", 280);
-    if (cut < 180) cut = 280;
-    chunks.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
   }
-  if (rest) chunks[chunks.length - 1] += ` ${rest}`;
-  return chunks.map((content) => ({ role: "user", content }));
+}
+
+// Fallback prompt for the retry attempts. The full prompt above is long, and a
+// model that already answered in prose tends to keep doing it; a shorter ask
+// with one worked example leaves more of the token budget for the JSON itself.
+const AI_FILL_COMPACT_PROMPT = `You are a museum cataloging assistant. The user pasted reference text about ONE museum item: a painting, sculpture, artifact, document, monument, heritage structure, or historic site. Treat the whole text as the description of a single item.
+
+Reply with one valid JSON object and nothing else. No markdown, no code fences, no commentary. Required keys: title, artist, year, location, description, quiz.
+
+Rules:
+- title: the item's own name, keeping any alias in parentheses, for example "Puente de Malabon (Malabon Bridge)".
+- artist: only when a creator is explicitly credited, otherwise null. Never use a government, institution, army, or historical figure as the artist.
+- year: when the item was created, built, or completed, with qualifiers such as "19th century" or "c. 1899". Use null if unknown.
+- location: where it is now, or where it was built, based only on the text. Use null if unknown.
+- description: 3-4 sentences, about 60-100 words.
+- quiz: exactly 3 multiple-choice questions answerable from the text. Each question uses the shape {"question":"...","options":["...","...","...","..."],"correctIndex":0} with exactly 4 options, and correctIndex is the zero-based index of the right answer.
+
+Example output:
+{"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted in 1889 while Van Gogh was at an asylum in Saint-Remy-de-Provence. It is among the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was it painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is it permanently displayed?","options":["MoMA, New York","The Louvre, Paris","The Prado, Madrid","The Uffizi, Florence"],"correctIndex":0}]}`;
+
+// The deployed proxy answers with a chat apology when the model sends nothing
+// back, so treat "no JSON at all" as an empty answer rather than a parse bug.
+function looksLikeNoAnswer(text) {
+  return !text.includes("{") || /couldn't come up with an answer/i.test(text);
+}
+
+async function requestAiFill(messages, systemPrompt) {
+  const res = await fetch(GROQ_PROXY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, systemPrompt, jsonMode: true, maxTokens: AI_FILL_MAX_TOKENS }),
+  });
+
+  let payload = null;
+  try { payload = await res.json(); } catch (err) {}
+
+  if (!res.ok) {
+    const detail = payload && payload.error ? payload.error : `API returned ${res.status} ${res.statusText}`;
+    console.error("[AI] API error:", res.status, payload);
+    // 429 and 5xx are worth another attempt; a bad request or bad key is not.
+    throw aiFillError(detail, res.status === 429 || res.status >= 500);
+  }
+
+  const raw = String((payload && payload.content) || "").trim();
+  if (payload && payload.model) console.log("[AI] Model:", payload.model, "finish:", payload.finishReason);
+  if (!raw) throw aiFillError("The AI returned an empty answer.", true);
+
+  const parsed = extractAiJson(raw);
+  if (!parsed) {
+    console.error("[AI] Unparseable content:", raw.substring(0, 300));
+    const err = aiFillError(
+      looksLikeNoAnswer(raw)
+        ? "The AI sent no usable answer. Try again, or paste a shorter reference text."
+        : "The AI returned malformed JSON. Try again.",
+      true,
+    );
+    err.raw = raw;
+    throw err;
+  }
+  return parsed;
+}
+
+function applyAiFillResult(parsed) {
+  if (parsed.title) document.getElementById("artwork-name").value = parsed.title;
+  if (parsed.artist !== undefined) document.getElementById("artwork-artist").value = parsed.artist || "";
+  if (parsed.year !== undefined) document.getElementById("artwork-year").value = parsed.year || "";
+  if (parsed.location !== undefined) document.getElementById("artwork-location").value = parsed.location || "";
+  if (parsed.description) document.getElementById("artwork-details").value = parsed.description;
+
+  const generatedQuiz = sanitizeQuiz(parsed.quiz);
+  if (generatedQuiz.length > 0) renderQuizEditor(generatedQuiz);
+
+  aiModalStatus.textContent = generatedQuiz.length > 0
+    ? "✅ Fields and quiz filled! Closing…"
+    : "✅ Fields filled! Quiz could not be generated.";
+  aiModalStatus.className = "ai-status success";
+
+  setTimeout(() => {
+    aiModal.classList.add("hidden");
+  }, 1200);
+
+  return generatedQuiz.length;
+}
+
+// Attempts 2..N use the compact prompt. The first attempt keeps the full prompt
+// because it gives the best result when the model answers it correctly.
+async function aiFillWithRetries(query) {
+  const messages = buildAiMessages(query);
+  let lastError = null;
+  for (let attempt = 2; attempt <= AI_FILL_ATTEMPTS; attempt++) {
+    aiModalStatus.textContent = `Retrying (${attempt} of ${AI_FILL_ATTEMPTS})…`;
+    aiModalStatus.className = "ai-status";
+    await sleep(AI_FILL_RETRY_DELAY * (attempt - 1));
+    try {
+      return await requestAiFill(messages, AI_FILL_COMPACT_PROMPT);
+    } catch (err) {
+      console.warn(`[AI] Retry ${attempt} failed:`, err.message);
+      lastError = err;
+      if (err.retryable === false) break;
+    }
+  }
+  throw lastError || aiFillError("The AI could not fill the form.", true);
 }
 
 btnAiSubmit.addEventListener("click", async () => {
@@ -365,75 +494,61 @@ Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael 
 Input: "The historic Puente de Malabon (Malabon Bridge) was constructed during the 19th century under the Spanish colonial administration to span the Malabon-Tullahan river network, serving as a commercial artery connecting Tambobong (modern-day Malabon) to trade routes into Manila. Built primarily of masonry and stone arches, it carried goods, livestock, and produce moved by river barges and land carriages. During the Philippine-American War in 1899, Filipino revolutionary forces deliberately blew out one of its stone spans to stall advancing American troops. It was later rebuilt in reinforced concrete and steel."
 Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th century","location":"Malabon, Philippines","description":"A 19th-century stone-arch bridge built under Spanish colonial rule to connect Tambobong, now Malabon, with trade routes into Manila. It was damaged during the Philippine-American War in 1899 when Filipino forces destroyed one of its stone spans. The bridge was later rebuilt with reinforced concrete and steel.","quiz":[{"question":"What was the bridge's primary purpose?","options":["Connecting trade routes to Manila","Serving as a military fortress","Irrigating nearby farms","Housing colonial offices"],"correctIndex":0},{"question":"During which conflict was one of its stone spans destroyed?","options":["Philippine-American War","World War II","Spanish-American War","Philippine Revolution"],"correctIndex":0},{"question":"What materials were used in its later rebuilds?","options":["Reinforced concrete and steel","Bamboo and timber","Marble and bronze","Adobe and coral stone"],"correctIndex":0}]}`,
         jsonMode: true,
+        maxTokens: AI_FILL_MAX_TOKENS,
       }),
     });
 
     console.log("[AI] Response status:", res.status, res.statusText);
 
-    if (!res.ok) {
-      let errBody = "";
-      try { errBody = await res.text(); } catch (e) {}
-      console.error("[AI] API error body:", errBody);
-      throw new Error(`API returned ${res.status} ${res.statusText}. ${errBody}`);
-    }
-
-    const data = await res.json();
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
     console.log("[AI] Raw response:", data);
 
-    const raw = data.content || "";
+    if (!res.ok) {
+      const detail = (data && data.error) || `API returned ${res.status} ${res.statusText}`;
+      console.error("[AI] API error body:", data);
+      throw aiFillError(detail, res.status === 429 || res.status >= 500);
+    }
+
+    const raw = String((data && data.content) || "").trim();
     console.log("[AI] Content text:", raw);
+    if (data && data.model) console.log("[AI] Model:", data.model, "finish:", data.finishReason);
+    if (!raw) throw aiFillError("The AI returned an empty answer.", true);
 
-    if (!raw) {
-      throw new Error("AI returned empty response.");
-    }
-
-    // Extract JSON from response (handle markdown fences)
-    let jsonStr = raw;
-    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-    // Also try to find JSON between curly braces if the above didn't work
-    if (!jsonStr.startsWith("{")) {
-      const braceMatch = raw.match(/\{[\s\S]*\}/);
-      if (braceMatch) jsonStr = braceMatch[0];
-    }
-
-    console.log("[AI] Parsed JSON string:", jsonStr);
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch (parseErr) {
-      console.error("[AI] JSON parse failed:", parseErr);
-      console.error("[AI] String that failed:", jsonStr);
-      throw new Error(`AI response was not valid JSON. Raw: ${raw.substring(0, 200)}`);
+    const parsed = extractAiJson(raw);
+    if (!parsed) {
+      console.error("[AI] Unparseable content:", raw.substring(0, 300));
+      const parseError = aiFillError(
+        looksLikeNoAnswer(raw)
+          ? "The AI sent no usable answer. Try again, or paste a shorter reference text."
+          : "The AI returned malformed JSON. Try again.",
+        true,
+      );
+      parseError.raw = raw;
+      throw parseError;
     }
 
     console.log("[AI] Parsed object:", parsed);
 
-    // Fill form fields
-    if (parsed.title) document.getElementById("artwork-name").value = parsed.title;
-    if (parsed.artist !== undefined) document.getElementById("artwork-artist").value = parsed.artist || "";
-    if (parsed.year !== undefined) document.getElementById("artwork-year").value = parsed.year || "";
-    if (parsed.location !== undefined) document.getElementById("artwork-location").value = parsed.location || "";
-    if (parsed.description) document.getElementById("artwork-details").value = parsed.description;
-
-    const generatedQuiz = sanitizeQuiz(parsed.quiz);
-    if (generatedQuiz.length > 0) renderQuizEditor(generatedQuiz);
-
-    aiModalStatus.textContent = generatedQuiz.length > 0
-      ? "✅ Fields and quiz filled! Closing…"
-      : "✅ Fields filled! Closing…";
-    aiModalStatus.className = "ai-status success";
-
-    setTimeout(() => {
-      aiModal.classList.add("hidden");
-    }, 1200);
+    applyAiFillResult(parsed);
 
   } catch (err) {
-    console.error("[AI] Full error:", err);
-    aiModalStatus.textContent = err.message || "Unknown error. Check browser console (F12) for details.";
-    aiModalStatus.className = "ai-status error";
+    console.error("[AI] Attempt 1 failed:", err, err.raw ? err.raw.substring(0, 300) : "");
+    // Stop right away on errors a retry cannot fix (bad request, bad key).
+    if (err.retryable === false) {
+      aiModalStatus.textContent = err.message || "Unknown error. Check the browser console (F12) for details.";
+      aiModalStatus.className = "ai-status error";
+      return;
+    }
+    try {
+      const parsed = await aiFillWithRetries(query);
+      console.log("[AI] Retry succeeded:", parsed);
+      applyAiFillResult(parsed);
+    } catch (retryErr) {
+      console.error("[AI] All attempts failed:", retryErr);
+      aiModalStatus.textContent = retryErr.message || "Could not reach the AI. Check your connection and try again.";
+      aiModalStatus.className = "ai-status error";
+    }
   } finally {
     btnAiSubmit.disabled = false;
   }
