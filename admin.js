@@ -80,6 +80,7 @@ const btnAiSubmit = document.getElementById("btn-ai-submit");
 const btnAiCancel = document.getElementById("btn-ai-cancel");
 const btnOpenAiModal = document.getElementById("btn-open-ai-modal");
 const aiModalStatus = document.getElementById("ai-modal-status");
+const aiCharCount = document.getElementById("ai-char-count");
 
 // Form refs
 const imageUploadZone = document.getElementById("image-upload-zone");
@@ -291,6 +292,7 @@ async function loadAllData() {
 // =====================================================================
 btnOpenAiModal.addEventListener("click", () => {
   aiPasteInput.value = "";
+  updateAiCharCount();
   aiModalStatus.textContent = "";
   aiModalStatus.className = "ai-status";
   aiModal.classList.remove("hidden");
@@ -301,21 +303,89 @@ btnAiCancel.addEventListener("click", () => {
   aiModal.classList.add("hidden");
 });
 
-// The proxy truncates each message to 4000 chars, so send the pasted reference
-// text as one user message. Splitting it into ~280-char turns (as this used to)
-// inflated the prompt and made the model treat the fragments as separate
-// requests, which is one reason it answered in prose instead of JSON.
+// Groq's chat models take roughly 128k tokens of context, so a long reference
+// article is no trouble for the model itself: the old 4,000-character ceiling
+// came from the public chat widget's input sanitizer, which this form inherited
+// along with the textarea maxlength. Text up to AI_FILL_DIRECT_LIMIT now goes
+// out in a single request, and anything longer is condensed into factual notes
+// first, so a full article or data sheet still fills the form.
+//
+// The text is still sent as ONE user message. Splitting it into ~280-char turns
+// (as this used to) inflated the prompt and made the model treat the fragments
+// as separate requests, which is one reason it answered in prose instead of JSON.
 function buildAiMessages(text) {
-  const clean = text.slice(0, 4000).trim();
+  const clean = String(text || "").trim();
   return clean ? [{ role: "user", content: clean }] : [];
 }
+
+// Break a long document on paragraph, then sentence, then hard character
+// boundaries, so no chunk reaches the model cut mid-sentence.
+function splitReference(text, size) {
+  const chunks = [];
+  let current = "";
+  const flush = () => {
+    const trimmed = current.trim();
+    if (trimmed) chunks.push(trimmed);
+    current = "";
+  };
+
+  const units = String(text || "")
+    .split(/\n{2,}/)
+    .flatMap((para) => (para.length <= size ? [para] : para.match(/[^.!?\n]+[.!?]*\s*/g) || [para]));
+
+  for (const unit of units) {
+    if (unit.length > size) {
+      flush();
+      for (let i = 0; i < unit.length; i += size) {
+        const slice = unit.slice(i, i + size).trim();
+        if (slice) chunks.push(slice);
+      }
+      continue;
+    }
+    if ((current + " " + unit).length > size) flush();
+    current = current ? `${current} ${unit}` : unit;
+  }
+  flush();
+  return chunks;
+}
+
+// Used on one slice of an over-long document: pull out only the facts a catalog
+// entry and its quiz could need, so the notes stay small no matter how long the
+// original was.
+const AI_FILL_CONDENSE_PROMPT = `You are a museum cataloging assistant. You receive ONE part of a longer reference document about a single museum item: a painting, sculpture, artifact, document, monument, heritage structure, or historic site.
+
+Pull out only the facts a catalog entry and its quiz could need, as short standalone notes. Keep exact names, dates, places, people, materials, dimensions, numbers, and events. Ignore bibliography, references, footnotes, copyright lines, navigation text, captions of unrelated images, and anything not about the item.
+
+Reply with one valid JSON object and nothing else: {"facts":["short factual note","short factual note"]}. Give 15 to 30 notes. Never return an empty list.`;
+
 
 // The Groq proxy substitutes a chat-style apology whenever the model returns no
 // content, and the failure arrives as HTTP 200. These values drive the retry
 // ladder further down so one bad generation no longer kills the whole fill.
 const AI_FILL_MAX_TOKENS = 2600;
+const AI_FILL_CONDENSE_TOKENS = 1600;
 const AI_FILL_ATTEMPTS = 3;
 const AI_FILL_RETRY_DELAY = 700;
+
+// Length budget for the pasted reference text. Up to AI_FILL_DIRECT_LIMIT goes
+// straight to the model; beyond that the text is condensed in AI_FILL_CHUNK_CHARS
+// slices first, which also keeps each request well inside Groq's per-minute token
+// budget. AI_FILL_HARD_LIMIT matches maxlength on the textarea in admin.html and
+// still leaves headroom under the proxy's 10-requests-per-minute limit.
+const AI_FILL_DIRECT_LIMIT = 20000;
+const AI_FILL_CHUNK_CHARS = 15000;
+const AI_FILL_HARD_LIMIT = 60000;
+
+// Keep the character counter beside the textarea honest, and flag the point where
+// the text stops going out in one piece.
+function updateAiCharCount() {
+  if (!aiCharCount) return;
+  const length = aiPasteInput.value.length;
+  aiCharCount.textContent = length.toLocaleString();
+  aiCharCount.classList.toggle("over", length > AI_FILL_DIRECT_LIMIT);
+}
+
+aiPasteInput.addEventListener("input", updateAiCharCount);
 
 function aiFillError(message, retryable) {
   const err = new Error(message);
@@ -373,11 +443,16 @@ function looksLikeNoAnswer(text) {
   return !text.includes("{") || /couldn't come up with an answer/i.test(text);
 }
 
-async function requestAiFill(messages, systemPrompt) {
+async function requestAiFill(messages, systemPrompt, maxTokens) {
   const res = await fetch(GROQ_PROXY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, systemPrompt, jsonMode: true, maxTokens: AI_FILL_MAX_TOKENS }),
+    body: JSON.stringify({
+      messages,
+      systemPrompt,
+      jsonMode: true,
+      maxTokens: maxTokens || AI_FILL_MAX_TOKENS,
+    }),
   });
 
   let payload = null;
@@ -399,8 +474,8 @@ async function requestAiFill(messages, systemPrompt) {
     console.error("[AI] Unparseable content:", raw.substring(0, 300));
     const err = aiFillError(
       looksLikeNoAnswer(raw)
-        ? "The AI sent no usable answer. Try again, or paste a shorter reference text."
-        : "The AI returned malformed JSON. Try again.",
+        ? "The AI sent no usable answer. Please try again."
+        : "The AI returned malformed JSON. Please try again.",
       true,
     );
     err.raw = raw;
@@ -431,10 +506,54 @@ function applyAiFillResult(parsed) {
   return generatedQuiz.length;
 }
 
+// Condense an over-long document slice by slice, then hand the notes to the
+// normal extraction prompt. Every request stays small, so neither the proxy nor
+// the model has to swallow an unbounded prompt.
+async function condenseReference(text, onProgress) {
+  const chunks = splitReference(text, AI_FILL_CHUNK_CHARS);
+  const facts = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (onProgress) onProgress(`Reading the long reference text (part ${i + 1} of ${chunks.length})…`);
+    const parsed = await requestAiFill(
+      buildAiMessages(chunks[i]),
+      AI_FILL_CONDENSE_PROMPT,
+      AI_FILL_CONDENSE_TOKENS,
+    );
+    const list = Array.isArray(parsed.facts) ? parsed.facts : [];
+    for (const fact of list) {
+      const note = typeof fact === "string" ? fact.trim() : "";
+      if (note && !facts.includes(note)) facts.push(note);
+    }
+  }
+
+  if (!facts.length) {
+    throw aiFillError("The AI could not read the long reference text. Please try again.", true);
+  }
+
+  let digest = facts.map((fact) => `- ${fact}`).join("\n");
+  if (digest.length > AI_FILL_DIRECT_LIMIT) digest = digest.slice(0, AI_FILL_DIRECT_LIMIT);
+  return `Notes taken from a longer reference document:\n${digest}`;
+}
+
+// Decide how the pasted text reaches the model: as-is for a normal article,
+// condensed first when it is much longer than one request should carry.
+async function prepareAiText(raw, onProgress) {
+  const text = String(raw || "").trim();
+  if (text.length > AI_FILL_HARD_LIMIT) {
+    throw aiFillError(
+      `That reference text is ${text.length.toLocaleString()} characters, over the ${AI_FILL_HARD_LIMIT.toLocaleString()} limit. Trim it and try again.`,
+      false,
+    );
+  }
+  if (text.length <= AI_FILL_DIRECT_LIMIT) return text;
+  return condenseReference(text, onProgress);
+}
+
 // Attempts 2..N use the compact prompt. The first attempt keeps the full prompt
 // because it gives the best result when the model answers it correctly.
-async function aiFillWithRetries(query) {
-  const messages = buildAiMessages(query);
+async function aiFillWithRetries(preparedText) {
+  const messages = buildAiMessages(preparedText);
   let lastError = null;
   for (let attempt = 2; attempt <= AI_FILL_ATTEMPTS; attempt++) {
     aiModalStatus.textContent = `Retrying (${attempt} of ${AI_FILL_ATTEMPTS})…`;
@@ -463,13 +582,29 @@ btnAiSubmit.addEventListener("click", async () => {
   aiModalStatus.className = "ai-status";
   btnAiSubmit.disabled = true;
 
+  // A very long reference text is condensed first, so no single request is
+  // oversized and the model still sees every part of the document.
+  let preparedText = query;
+  try {
+    preparedText = await prepareAiText(query, (message) => {
+      aiModalStatus.textContent = message;
+      aiModalStatus.className = "ai-status";
+    });
+  } catch (prepErr) {
+    console.error("[AI] Could not prepare the reference text:", prepErr);
+    aiModalStatus.textContent = prepErr.message || "Could not read that reference text. Please try again.";
+    aiModalStatus.className = "ai-status error";
+    btnAiSubmit.disabled = false;
+    return;
+  }
+
   try {
     console.log("[AI] Sending request to Groq proxy…");
     const res = await fetch(GROQ_PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        messages: buildAiMessages(query),
+        messages: buildAiMessages(preparedText),
         systemPrompt: `You are a museum cataloging assistant. The user pasted reference text about ONE collection item. If the text arrives as several consecutive user messages, treat them as one continuous reference. It may be a painting, sculpture, artifact, document, monument, heritage structure, historical site, or any other museum object. Extract catalog fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
 
 CRITICAL RULES:
@@ -520,8 +655,8 @@ Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th
       console.error("[AI] Unparseable content:", raw.substring(0, 300));
       const parseError = aiFillError(
         looksLikeNoAnswer(raw)
-          ? "The AI sent no usable answer. Try again, or paste a shorter reference text."
-          : "The AI returned malformed JSON. Try again.",
+          ? "The AI sent no usable answer. Please try again."
+          : "The AI returned malformed JSON. Please try again.",
         true,
       );
       parseError.raw = raw;
@@ -541,7 +676,7 @@ Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th
       return;
     }
     try {
-      const parsed = await aiFillWithRetries(query);
+      const parsed = await aiFillWithRetries(preparedText);
       console.log("[AI] Retry succeeded:", parsed);
       applyAiFillResult(parsed);
     } catch (retryErr) {

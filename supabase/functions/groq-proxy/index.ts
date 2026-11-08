@@ -258,13 +258,33 @@ export default {
         return errorResponse("Invalid messages array", 400);
       }
 
-      const sanitizedMessages = messages.slice(-20).map((m: any) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: sanitizeInput(String(m.content || ""), 4000),
-      }));
-
       const isJsonMode = jsonMode || (systemPrompt && systemPrompt.includes("JSON"));
       const systemContent = systemPrompt || "You are a helpful assistant.";
+
+      // The admin AI fill pastes reference documents, so JSON mode gets a far
+      // larger budget than the public chat widget: a whole article, or one
+      // slice of a condensed one, arrives as a single user message. The request
+      // total is still capped so one call cannot balloon.
+      const perMessageCap = isJsonMode ? 24000 : 4000;
+      const totalCap = isJsonMode ? 48000 : perMessageCap * 20;
+      let sanitizedMessages = messages.slice(-20).map((m: any) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: sanitizeInput(String(m.content || ""), perMessageCap),
+      }));
+
+      if (isJsonMode) {
+        let totalChars = sanitizedMessages.reduce((sum, m) => sum + m.content.length, 0);
+        while (totalChars > totalCap && sanitizedMessages.length > 1) {
+          totalChars -= sanitizedMessages[0].content.length;
+          sanitizedMessages = sanitizedMessages.slice(1);
+        }
+        if (totalChars > totalCap && sanitizedMessages.length === 1) {
+          sanitizedMessages[0] = {
+            ...sanitizedMessages[0],
+            content: sanitizedMessages[0].content.slice(0, totalCap),
+          };
+        }
+      }
 
       const requested = Number(requestedMaxTokens);
       let maxTokens = Number.isFinite(requested) && requested > 0
@@ -305,7 +325,7 @@ export default {
         return new Response(
           JSON.stringify({
             error: last?.finishReason === "length"
-              ? "The AI ran out of room before finishing the quiz. Try pasting shorter reference text."
+              ? "The quiz was cut off before it finished. Please try again."
               : "The AI returned an empty answer. Please try again in a moment.",
             model: last?.model ?? null,
             finishReason: last?.finishReason ?? null,
