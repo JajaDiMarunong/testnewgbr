@@ -159,8 +159,9 @@ let cachedLeaderboard = [];
 let cachedNotes = [];
 
 // -------------------------------------------------------------------
-// Login - Use Firebase Email/Password Auth (admin@gbrmuseum.test / GBRMu5281)
-// Create this user in Firebase Console → Authentication → Users → Add user
+// Login - Firebase Email/Password Auth
+// Create this user in Firebase Console → Authentication → Users → Add user.
+// Credentials are never stored in source; the password is entered at runtime.
 // -------------------------------------------------------------------
 const ADMIN_EMAIL = "admin@gbrmuseum.test";
 
