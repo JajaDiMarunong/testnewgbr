@@ -781,8 +781,9 @@ function aiFillPromptForAttempt() {
   return aiFillProxyIsStale ? AI_FILL_LEGACY_PROMPT : AI_FILL_PROMPT;
 }
 
-// Attempts 2..N use the compact prompt. The first attempt keeps the full prompt
-// because it gives the best result when the model answers it correctly.
+// Attempts 2..N use the smaller retry prompt. The first attempt opens with the
+// full prompt — or straight to the bare schema once the deployed build is known
+// to be the older one — because it gives the best result when it is answered.
 async function aiFillWithRetries(preparedText, waitSeconds) {
   let lastError = null;
   let waitMs = waitSeconds > 0 ? Math.min(waitSeconds * 1000, 20000) : 0;
