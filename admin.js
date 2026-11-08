@@ -412,7 +412,24 @@ function condenseLocally(text, budget) {
 // ladder further down so one bad generation no longer kills the whole fill.
 const AI_FILL_MAX_TOKENS = 2600;
 const AI_FILL_ATTEMPTS = 3;
+// The older build answers in a lottery: the same request comes back complete,
+// cut in half, or as the chat apology, because its output budget is fixed and
+// shared with the model's own reasoning. Extra attempts are cheap (they stay well
+// inside the per-minute limit) and each one is another chance at a full answer.
+const AI_FILL_LEGACY_ATTEMPTS = 4;
 const AI_FILL_RETRY_DELAY = 700;
+
+function aiFillAttemptBudget() {
+  return aiFillProxyIsStale ? AI_FILL_LEGACY_ATTEMPTS : AI_FILL_ATTEMPTS;
+}
+
+// What to tell the admin when every attempt failed. On the older build the cause
+// is on the server, so say so instead of asking them to try the same thing again.
+function aiFillFailureMessage(err) {
+  const base = (err && err.message) || "Could not reach the AI. Check your connection and try again.";
+  if (!aiFillProxyIsStale) return base;
+  return `${base} The deployed groq-proxy function is an older build that keeps cutting answers off — redeploying it fixes this; details are in the browser console.`;
+}
 
 // Length budget for the pasted reference text. Anything up to
 // AI_FILL_DIRECT_LIMIT goes to the model untouched; longer text is trimmed to
@@ -422,6 +439,34 @@ const AI_FILL_RETRY_DELAY = 700;
 const AI_FILL_DIRECT_LIMIT = 20000;
 const AI_FILL_CONDENSED_BUDGET = 19000;
 const AI_FILL_HARD_LIMIT = 60000;
+
+// An older deployment of groq-proxy is still live on some projects. That build
+// clamps every message at 4,000 characters, ignores the requested token budget
+// (it hard-codes 1,800 for JSON replies and 300 for chat), does not enforce
+// response_format, and answers with a chat apology when the model sends nothing
+// back. A 60-100 word description plus three quiz questions does not fit in its
+// budget, so the model runs out of room and the fill fails with "no usable
+// answer". Replies from that build carry no `model` field, which is how the page
+// recognises it: from then on it trims to what the old function accepts and asks
+// for a shorter answer, so the form still fills.
+const AI_FILL_LEGACY_TEXT_LIMIT = 3800;
+const AI_FILL_LEGACY_FLAG = "gbr_aiFillStaleProxy";
+let aiFillProxyIsStale = readAiFillStaleFlag();
+
+function readAiFillStaleFlag() {
+  try { return localStorage.getItem(AI_FILL_LEGACY_FLAG) === "1"; } catch (err) { return false; }
+}
+
+// Remember the finding across reloads so the next fill starts with the small
+// request instead of failing once to discover the same thing again.
+function setAiFillProxyStale(isStale) {
+  if (aiFillProxyIsStale === isStale) return;
+  aiFillProxyIsStale = isStale;
+  try {
+    if (isStale) localStorage.setItem(AI_FILL_LEGACY_FLAG, "1");
+    else localStorage.removeItem(AI_FILL_LEGACY_FLAG);
+  } catch (err) {}
+}
 
 // Keep the character counter beside the textarea honest, and flag the point where
 // the text stops going out in one piece.
@@ -469,6 +514,30 @@ function extractAiJson(text) {
 // Fallback prompt for the retry attempts. The full prompt above is long, and a
 // model that already answered in prose tends to keep doing it; a shorter ask
 // with one worked example leaves more of the token budget for the JSON itself.
+const AI_FILL_PROMPT = `You are a museum cataloging assistant. The user pasted reference text about ONE collection item. If the text arrives as several consecutive user messages, treat them as one continuous reference. It may be a painting, sculpture, artifact, document, monument, heritage structure, historical site, or any other museum object. Extract catalog fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
+
+CRITICAL RULES:
+1. Return ONLY the JSON object. No markdown, no code fences, no explanations, no text before or after.
+2. Identify the PRIMARY subject of the text, not every person, place, or event mentioned. Use the item's own name as the title. If the name has an alias in parentheses, keep both, e.g. "Puente de Malabon (Malabon Bridge)".
+3. artist: use the creator, maker, painter, sculptor, architect, or engineer only when explicitly credited. For buildings, bridges, sites, monuments, and cultural objects with no named creator, use null. Never use a government, institution, army, or historical figure as the artist unless the text says they created the item.
+4. year: use the item's creation, construction, or completion period. Prefer the date it was made or built over unrelated event dates. Keep qualifiers such as "19th century", "c. 1899", or "Undated". If several dates appear, choose the one describing when the item was created.
+5. location: use the item's current location or the place where it was built or displayed, based only on the text. Do not invent a museum or city.
+6. description: 3-4 concise sentences (about 60-100 words). Summarize what the item is, its origin or period, and its historical significance. Do not copy the entire input.
+7. quiz: exactly 3 multiple-choice questions answerable only from the supplied text. Each item must use this shape: {"question":"...","options":["...","...","...","..."],"correctIndex":0}. Every question must have exactly 4 options. correctIndex is the zero-based index of the correct answer. Test different facts, and make wrong options plausible but clearly incorrect.
+8. Use null only when the information is truly absent. Never use null for quiz; always provide exactly 3 questions.
+9. If the text covers multiple objects, catalog the first or main item and ignore unrelated details.
+10. The JSON must be complete and valid. Keep wording concise so the full response fits.
+
+Examples:
+Input: "The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."
+Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889 while he was at an asylum in Saint-Rémy-de-Provence. It is one of the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was The Starry Night painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is The Starry Night permanently displayed?","options":["MoMA, New York","The Louvre, Paris","National Gallery, London","Prado Museum, Madrid"],"correctIndex":0}]}
+
+Input: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal. Undated. Located at GBR Jr. Museum, General Trias, Philippines."
+Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.","quiz":[{"question":"Who painted the portrait of Crisanto de los Reyes y Mendoza?","options":["Rafael del Casal","Juan Luna","Felix Hidalgo","Fabian de la Rosa"],"correctIndex":0},{"question":"Where is this portrait located?","options":["GBR Jr. Museum, General Trias","National Museum, Manila","Ayala Museum, Makati","The Louvre, Paris"],"correctIndex":0},{"question":"What year is listed for this portrait?","options":["Undated","1889","1910","1930"],"correctIndex":0}]}
+
+Input: "The historic Puente de Malabon (Malabon Bridge) was constructed during the 19th century under the Spanish colonial administration to span the Malabon-Tullahan river network, serving as a commercial artery connecting Tambobong (modern-day Malabon) to trade routes into Manila. Built primarily of masonry and stone arches, it carried goods, livestock, and produce moved by river barges and land carriages. During the Philippine-American War in 1899, Filipino revolutionary forces deliberately blew out one of its stone spans to stall advancing American troops. It was later rebuilt in reinforced concrete and steel."
+Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th century","location":"Malabon, Philippines","description":"A 19th-century stone-arch bridge built under Spanish colonial rule to connect Tambobong, now Malabon, with trade routes into Manila. It was damaged during the Philippine-American War in 1899 when Filipino forces destroyed one of its stone spans. The bridge was later rebuilt with reinforced concrete and steel.","quiz":[{"question":"What was the bridge's primary purpose?","options":["Connecting trade routes to Manila","Serving as a military fortress","Irrigating nearby farms","Housing colonial offices"],"correctIndex":0},{"question":"During which conflict was one of its stone spans destroyed?","options":["Philippine-American War","World War II","Spanish-American War","Philippine Revolution"],"correctIndex":0},{"question":"What materials were used in its later rebuilds?","options":["Reinforced concrete and steel","Bamboo and timber","Marble and bronze","Adobe and coral stone"],"correctIndex":0}]}`;
+
 const AI_FILL_COMPACT_PROMPT = `You are a museum cataloging assistant. The user pasted reference text about ONE museum item: a painting, sculpture, artifact, document, monument, heritage structure, or historic site. Treat the whole text as the description of a single item.
 
 Reply with one valid JSON object and nothing else. No markdown, no code fences, no commentary. Required keys: title, artist, year, location, description, quiz.
@@ -483,6 +552,82 @@ Rules:
 
 Example output:
 {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted in 1889 while Van Gogh was at an asylum in Saint-Remy-de-Provence. It is among the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was it painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is it permanently displayed?","options":["MoMA, New York","The Louvre, Paris","The Prado, Madrid","The Uffizi, Florence"],"correctIndex":0}]}`;
+
+// The older proxy build stops mid-answer when the model runs out of its fixed
+// output budget, which leaves JSON that simply never closes. Cutting back to the
+// last complete value and closing the open brackets keeps the fields that did
+// arrive instead of discarding a reply that already names the item.
+function repairAiJson(text) {
+  let candidate = String(text || "").trim();
+  const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) candidate = fenced[1].trim();
+  const start = candidate.indexOf("{");
+  if (start === -1) return null;
+  candidate = candidate.slice(start);
+
+  const scan = (fragment) => {
+    const open = [];
+    let inString = false;
+    let escaped = false;
+    let lastQuote = -1;
+    for (let i = 0; i < fragment.length; i++) {
+      const ch = fragment[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') { inString = false; lastQuote = i; }
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === "{" || ch === "[") open.push(ch);
+      else if (ch === "}" || ch === "]") {
+        if (open.length && open[open.length - 1] === (ch === "}" ? "{" : "[")) open.pop();
+      }
+    }
+    return { open, inString, lastQuote };
+  };
+
+  // A value that stopped mid-string is dropped, along with a key that never got
+  // a value; both would only add half a word to the form.
+  const first = scan(candidate);
+  if (first.inString) {
+    if (first.lastQuote < 1) return null;
+    candidate = candidate.slice(0, first.lastQuote + 1);
+  }
+  candidate = candidate
+    .replace(/[{,]\s*"[^"]*"\s*:?\s*$/, "")
+    .replace(/[,\s]+$/, "");
+  if (candidate.length < 2) return null;
+
+  const { open } = scan(candidate);
+  let closed = candidate;
+  for (let i = open.length - 1; i >= 0; i--) closed += open[i] === "{" ? "}" : "]";
+  try {
+    const parsed = JSON.parse(closed);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// A recovered answer is only worth filling the form with when it names the item
+// and carries either a usable description or at least one complete question.
+function isUsableAiPartial(parsed) {
+  if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim()) return false;
+  const description = typeof parsed.description === "string" ? parsed.description.trim() : "";
+  return description.length >= 60 || sanitizeQuiz(parsed.quiz).length > 0;
+}
+
+// The prompt for the older proxy build, whose output budget is fixed at 1,800
+// tokens however much the page asks for, and which does not enforce JSON mode.
+// Length is the whole trick here: measured against the live function, this bare
+// schema returns a complete answer five times out of six, while the same request
+// carrying a worked example and prose rules is cut off or comes back empty nearly
+// every time. So it stays a schema and nothing else. Redeploy groq-proxy and the
+// page goes back to the full prompt, longer text, and a longer description.
+const AI_FILL_LEGACY_PROMPT = `Reply with one JSON object and nothing else, no markdown:
+{"title":string,"artist":string|null,"year":string|null,"location":string|null,"description":string,"quiz":[{"question":string,"options":[string,string,string,string],"correctIndex":number}]}
+The description must be exactly 2 sentences. The quiz must have exactly 3 questions answerable from the text, each with 4 short options.`;
 
 // The deployed proxy answers with a chat apology when the model sends nothing
 // back, so treat "no JSON at all" as an empty answer rather than a parse bug.
@@ -504,6 +649,7 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
 
   let payload = null;
   try { payload = await res.json(); } catch (err) {}
+  console.log("[AI] Raw response:", payload);
 
   if (!res.ok) {
     const detail = payload && payload.error ? payload.error : `API returned ${res.status} ${res.statusText}`;
@@ -524,16 +670,31 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
   }
 
   const raw = String((payload && payload.content) || "").trim();
-  if (payload && payload.model === undefined) {
-    // Every current revision reports which model answered; a reply without it
-    // means the deployed function predates this page, which also means its
-    // 4,000-character cap is still in force.
-    console.warn("[AI] groq-proxy reply has no model field — the deployed function looks out of date. Redeploy groq-proxy.");
+  // Every current revision reports which model answered; a reply without it means
+  // the deployed function predates this page, so its 4,000-character cap and its
+  // fixed output budget are still in force. Remember that and answer with a
+  // smaller request instead of failing the same way on every attempt.
+  const legacyProxy = !!payload && payload.model === undefined;
+  // A network failure gives no payload at all, which says nothing about the
+  // deployed build; only a real reply is allowed to change the finding.
+  if (payload) setAiFillProxyStale(legacyProxy);
+  if (legacyProxy) {
+    console.warn("[AI] groq-proxy reply has no model field — the deployed function is an older build. Using a shorter request; redeploy groq-proxy for full-length fills.");
   }
   if (payload && payload.model) console.log("[AI] Model:", payload.model, "finish:", payload.finishReason);
   if (!raw) throw aiFillError("The AI returned an empty answer.", true);
 
-  const parsed = extractAiJson(raw);
+  let parsed = extractAiJson(raw);
+  let partial = false;
+  if (!parsed) {
+    // A reply that stopped mid-JSON still holds the fields that arrived.
+    const recovered = repairAiJson(raw);
+    partial = !!recovered && isUsableAiPartial(recovered);
+    if (partial) {
+      console.warn("[AI] Answer was cut off; recovered the complete fields:", recovered);
+      parsed = recovered;
+    }
+  }
   if (!parsed) {
     console.error("[AI] Unparseable content:", raw.substring(0, 300));
     const err = aiFillError(
@@ -545,6 +706,7 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
     err.raw = raw;
     throw err;
   }
+  if (partial) parsed.__partial = true;
   return parsed;
 }
 
@@ -558,6 +720,14 @@ function applyAiFillResult(parsed) {
   const generatedQuiz = sanitizeQuiz(parsed.quiz);
   if (generatedQuiz.length > 0) renderQuizEditor(generatedQuiz);
 
+  // A cut-off answer is worth handing over, but it must not look like a clean
+  // one: say so and leave the dialog open so the fields get read before saving.
+  if (parsed.__partial) {
+    aiModalStatus.textContent = "⚠️ The AI answer was cut off. Filled from what arrived — please review the description and quiz before saving.";
+    aiModalStatus.className = "ai-status error";
+    return generatedQuiz.length;
+  }
+
   aiModalStatus.textContent = generatedQuiz.length > 0
     ? "✅ Fields and quiz filled! Closing…"
     : "✅ Fields filled! Quiz could not be generated.";
@@ -568,6 +738,15 @@ function applyAiFillResult(parsed) {
   }, 1200);
 
   return generatedQuiz.length;
+}
+
+// Trim a text to what one request may carry. A document with no sentence breaks
+// cannot be trimmed by sentence, so the plain character budget is the fallback.
+function fitAiTextForLimit(text, limit) {
+  const value = String(text || "");
+  if (value.length <= limit) return value;
+  const condensed = condenseLocally(value, limit);
+  return condensed.length >= 200 ? condensed : value.slice(0, limit);
 }
 
 // Decide how the pasted text reaches the model: as-is for a normal article,
@@ -582,33 +761,51 @@ function prepareAiText(raw, onProgress) {
       false,
     );
   }
-  if (text.length <= AI_FILL_DIRECT_LIMIT) return text;
+  // The older function build cuts anything past 4,000 characters on the server,
+  // where the model cannot see the rest; trimming here keeps the fact-dense part
+  // of a long article instead of letting it be chopped mid-sentence.
+  const limit = aiFillProxyIsStale ? AI_FILL_LEGACY_TEXT_LIMIT : AI_FILL_DIRECT_LIMIT;
+  if (text.length <= limit) return text;
 
-  if (onProgress) onProgress("Shortening the long reference text…");
-  const condensed = condenseLocally(text, AI_FILL_CONDENSED_BUDGET);
-  // A document with no sentence breaks cannot be trimmed by sentence; fall back
-  // to the plain character budget the proxy itself enforces.
-  return condensed.length >= 200 ? condensed : text.slice(0, AI_FILL_DIRECT_LIMIT);
+  if (onProgress) {
+    onProgress(aiFillProxyIsStale
+      ? "Shortening the text to fit the deployed AI function…"
+      : "Shortening the long reference text…");
+  }
+  return fitAiTextForLimit(text, Math.min(limit, AI_FILL_CONDENSED_BUDGET));
+}
+
+// The prompt this page opens with: the full one when the deployed function is
+// current, the small one when we already know it is the older build.
+function aiFillPromptForAttempt() {
+  return aiFillProxyIsStale ? AI_FILL_LEGACY_PROMPT : AI_FILL_PROMPT;
 }
 
 // Attempts 2..N use the compact prompt. The first attempt keeps the full prompt
 // because it gives the best result when the model answers it correctly.
 async function aiFillWithRetries(preparedText, waitSeconds) {
-  const messages = buildAiMessages(preparedText);
   let lastError = null;
   let waitMs = waitSeconds > 0 ? Math.min(waitSeconds * 1000, 20000) : 0;
-  for (let attempt = 2; attempt <= AI_FILL_ATTEMPTS; attempt++) {
+  for (let attempt = 2; attempt <= aiFillAttemptBudget(); attempt++) {
+    const total = aiFillAttemptBudget();
     // A 429 says how long to wait; retrying sooner only burns the remaining
     // attempts against a budget that has not recovered yet.
     const delay = waitMs || AI_FILL_RETRY_DELAY * (attempt - 1);
     aiModalStatus.textContent = waitMs
       ? `Rate limited — retrying in ${Math.ceil(delay / 1000)}s…`
-      : `Retrying (${attempt} of ${AI_FILL_ATTEMPTS})…`;
+      : `Retrying (${attempt} of ${total})…`;
     aiModalStatus.className = "ai-status";
     await sleep(delay);
     waitMs = 0;
+    // The reply to the first attempt already told us which build is deployed.
+    // The older one needs a shorter text and a smaller answer, so both are cut
+    // down here rather than sending something it cannot finish.
+    const retryText = aiFillProxyIsStale
+      ? fitAiTextForLimit(preparedText, AI_FILL_LEGACY_TEXT_LIMIT)
+      : preparedText;
+    const retryPrompt = aiFillProxyIsStale ? AI_FILL_LEGACY_PROMPT : AI_FILL_COMPACT_PROMPT;
     try {
-      return await requestAiFill(messages, AI_FILL_COMPACT_PROMPT);
+      return await requestAiFill(buildAiMessages(retryText), retryPrompt);
     } catch (err) {
       console.warn(`[AI] Retry ${attempt} failed:`, err.message);
       lastError = err;
@@ -649,69 +846,7 @@ btnAiSubmit.addEventListener("click", async () => {
 
   try {
     console.log("[AI] Sending request to Groq proxy…");
-    const res = await fetch(GROQ_PROXY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: buildAiMessages(preparedText),
-        systemPrompt: `You are a museum cataloging assistant. The user pasted reference text about ONE collection item. If the text arrives as several consecutive user messages, treat them as one continuous reference. It may be a painting, sculpture, artifact, document, monument, heritage structure, historical site, or any other museum object. Extract catalog fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
-
-CRITICAL RULES:
-1. Return ONLY the JSON object. No markdown, no code fences, no explanations, no text before or after.
-2. Identify the PRIMARY subject of the text, not every person, place, or event mentioned. Use the item's own name as the title. If the name has an alias in parentheses, keep both, e.g. "Puente de Malabon (Malabon Bridge)".
-3. artist: use the creator, maker, painter, sculptor, architect, or engineer only when explicitly credited. For buildings, bridges, sites, monuments, and cultural objects with no named creator, use null. Never use a government, institution, army, or historical figure as the artist unless the text says they created the item.
-4. year: use the item's creation, construction, or completion period. Prefer the date it was made or built over unrelated event dates. Keep qualifiers such as "19th century", "c. 1899", or "Undated". If several dates appear, choose the one describing when the item was created.
-5. location: use the item's current location or the place where it was built or displayed, based only on the text. Do not invent a museum or city.
-6. description: 3-4 concise sentences (about 60-100 words). Summarize what the item is, its origin or period, and its historical significance. Do not copy the entire input.
-7. quiz: exactly 3 multiple-choice questions answerable only from the supplied text. Each item must use this shape: {"question":"...","options":["...","...","...","..."],"correctIndex":0}. Every question must have exactly 4 options. correctIndex is the zero-based index of the correct answer. Test different facts, and make wrong options plausible but clearly incorrect.
-8. Use null only when the information is truly absent. Never use null for quiz; always provide exactly 3 questions.
-9. If the text covers multiple objects, catalog the first or main item and ignore unrelated details.
-10. The JSON must be complete and valid. Keep wording concise so the full response fits.
-
-Examples:
-Input: "The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."
-Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889 while he was at an asylum in Saint-Rémy-de-Provence. It is one of the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was The Starry Night painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is The Starry Night permanently displayed?","options":["MoMA, New York","The Louvre, Paris","National Gallery, London","Prado Museum, Madrid"],"correctIndex":0}]}
-
-Input: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal. Undated. Located at GBR Jr. Museum, General Trias, Philippines."
-Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.","quiz":[{"question":"Who painted the portrait of Crisanto de los Reyes y Mendoza?","options":["Rafael del Casal","Juan Luna","Felix Hidalgo","Fabian de la Rosa"],"correctIndex":0},{"question":"Where is this portrait located?","options":["GBR Jr. Museum, General Trias","National Museum, Manila","Ayala Museum, Makati","The Louvre, Paris"],"correctIndex":0},{"question":"What year is listed for this portrait?","options":["Undated","1889","1910","1930"],"correctIndex":0}]}
-
-Input: "The historic Puente de Malabon (Malabon Bridge) was constructed during the 19th century under the Spanish colonial administration to span the Malabon-Tullahan river network, serving as a commercial artery connecting Tambobong (modern-day Malabon) to trade routes into Manila. Built primarily of masonry and stone arches, it carried goods, livestock, and produce moved by river barges and land carriages. During the Philippine-American War in 1899, Filipino revolutionary forces deliberately blew out one of its stone spans to stall advancing American troops. It was later rebuilt in reinforced concrete and steel."
-Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th century","location":"Malabon, Philippines","description":"A 19th-century stone-arch bridge built under Spanish colonial rule to connect Tambobong, now Malabon, with trade routes into Manila. It was damaged during the Philippine-American War in 1899 when Filipino forces destroyed one of its stone spans. The bridge was later rebuilt with reinforced concrete and steel.","quiz":[{"question":"What was the bridge's primary purpose?","options":["Connecting trade routes to Manila","Serving as a military fortress","Irrigating nearby farms","Housing colonial offices"],"correctIndex":0},{"question":"During which conflict was one of its stone spans destroyed?","options":["Philippine-American War","World War II","Spanish-American War","Philippine Revolution"],"correctIndex":0},{"question":"What materials were used in its later rebuilds?","options":["Reinforced concrete and steel","Bamboo and timber","Marble and bronze","Adobe and coral stone"],"correctIndex":0}]}`,
-        jsonMode: true,
-        maxTokens: AI_FILL_MAX_TOKENS,
-      }),
-    });
-
-    console.log("[AI] Response status:", res.status, res.statusText);
-
-    let data = null;
-    try { data = await res.json(); } catch (e) {}
-    console.log("[AI] Raw response:", data);
-
-    if (!res.ok) {
-      const detail = (data && data.error) || `API returned ${res.status} ${res.statusText}`;
-      console.error("[AI] API error body:", data);
-      throw aiFillError(detail, res.status === 429 || res.status >= 500);
-    }
-
-    const raw = String((data && data.content) || "").trim();
-    console.log("[AI] Content text:", raw);
-    if (data && data.model) console.log("[AI] Model:", data.model, "finish:", data.finishReason);
-    if (!raw) throw aiFillError("The AI returned an empty answer.", true);
-
-    const parsed = extractAiJson(raw);
-    if (!parsed) {
-      console.error("[AI] Unparseable content:", raw.substring(0, 300));
-      const parseError = aiFillError(
-        looksLikeNoAnswer(raw)
-          ? "The AI sent no usable answer. Please try again."
-          : "The AI returned malformed JSON. Please try again.",
-        true,
-      );
-      parseError.raw = raw;
-      throw parseError;
-    }
-
+    const parsed = await requestAiFill(buildAiMessages(preparedText), aiFillPromptForAttempt());
     console.log("[AI] Parsed object:", parsed);
 
     applyAiFillResult(parsed);
@@ -730,7 +865,7 @@ Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th
       applyAiFillResult(parsed);
     } catch (retryErr) {
       console.error("[AI] All attempts failed:", retryErr);
-      aiModalStatus.textContent = retryErr.message || "Could not reach the AI. Check your connection and try again.";
+      aiModalStatus.textContent = aiFillFailureMessage(retryErr);
       aiModalStatus.className = "ai-status error";
     }
   } finally {
