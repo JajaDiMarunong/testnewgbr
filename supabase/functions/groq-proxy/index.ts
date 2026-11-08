@@ -42,14 +42,20 @@ function getClientIp(req: Request): string {
   return req.headers.get("x-real-ip") || "unknown";
 }
 
-function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+// One AI Fill is a single request now, but the console may still retry, and the
+// public chat widget must not be able to use up that allowance (or be blocked by
+// it). JSON mode therefore has its own, larger bucket.
+const CHAT_RATE_LIMIT = 10;
+const JSON_RATE_LIMIT = 30;
+
+function checkRateLimit(key: string, limit: number): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
-  const entry = rateLimitMap.get(ip);
+  const entry = rateLimitMap.get(key);
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + 60000 });
+    rateLimitMap.set(key, { count: 1, resetAt: now + 60000 });
     return { allowed: true };
   }
-  if (entry.count >= 10) {
+  if (entry.count >= limit) {
     return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   }
   entry.count++;
@@ -242,13 +248,6 @@ export default {
     }
 
     const ip = getClientIp(req);
-    const rateLimit = checkRateLimit(ip);
-    if (!rateLimit.allowed) {
-      return new Response(JSON.stringify({ error: "Rate limited. Try again later." }), {
-        status: 429,
-        headers: { ...corsHeaders(), "Retry-After": String(rateLimit.retryAfter || 60) },
-      });
-    }
 
     try {
       const body = await req.json();
@@ -260,6 +259,19 @@ export default {
 
       const isJsonMode = jsonMode || (systemPrompt && systemPrompt.includes("JSON"));
       const systemContent = systemPrompt || "You are a helpful assistant.";
+
+      // Rate limiting happens after the mode is known, so an AI Fill and the chat
+      // bubble draw from separate per-minute budgets.
+      const rateLimit = checkRateLimit(
+        isJsonMode ? `${ip}:json` : ip,
+        isJsonMode ? JSON_RATE_LIMIT : CHAT_RATE_LIMIT,
+      );
+      if (!rateLimit.allowed) {
+        return new Response(JSON.stringify({ error: "Rate limited. Try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders(), "Retry-After": String(rateLimit.retryAfter || 60) },
+        });
+      }
 
       // The admin AI fill pastes reference documents, so JSON mode gets a far
       // larger budget than the public chat widget: a whole article, or one

@@ -318,62 +318,109 @@ function buildAiMessages(text) {
   return clean ? [{ role: "user", content: clean }] : [];
 }
 
-// Break a long document on paragraph, then sentence, then hard character
-// boundaries, so no chunk reaches the model cut mid-sentence.
-function splitReference(text, size) {
-  const chunks = [];
-  let current = "";
-  const flush = () => {
-    const trimmed = current.trim();
-    if (trimmed) chunks.push(trimmed);
-    current = "";
-  };
+// A long reference document is trimmed locally rather than condensed by extra
+// model calls. The facts a catalog entry needs (names, dates, places, materials,
+// numbers) live in a minority of the sentences, so keeping the densest ones
+// carries the useful content while every extra request — and its share of the
+// per-minute rate limit — disappears.
+const AI_FILL_BOILERPLATE = /(cookie|subscribe|newsletter|sign in|log in|share this|read more|advertisement|all rights reserved|copyright|privacy policy|terms of use|photo(?:graph)? by|image (?:courtesy|credit)|click here|download the app|follow us)/i;
+const AI_FILL_FACT_TERMS = /(built|construct|erect|paint|sculpt|design|carv|cast|establish|found|commission|complet|restor|declar|designat|install|unveil|centur|architect|engineer|collection|museum|gallery|height|width|length|diameter|dimension|material|bronze|marble|timber|stone|concrete|steel|canvas|watercolou?r|fort|bridge|church|tower|monument|shrine|heritage|histor)/gi;
 
-  const units = String(text || "")
-    .split(/\n{2,}/)
-    .flatMap((para) => (para.length <= size ? [para] : para.match(/[^.!?\n]+[.!?]*\s*/g) || [para]));
-
-  for (const unit of units) {
-    if (unit.length > size) {
-      flush();
-      for (let i = 0; i < unit.length; i += size) {
-        const slice = unit.slice(i, i + size).trim();
-        if (slice) chunks.push(slice);
-      }
-      continue;
-    }
-    if ((current + " " + unit).length > size) flush();
-    current = current ? `${current} ${unit}` : unit;
-  }
-  flush();
-  return chunks;
+// Rank one sentence by how much catalog-worthy information it carries.
+function scoreReferenceSentence(sentence) {
+  let score = 0;
+  if (/\d/.test(sentence)) score += 3;
+  if (/\b(?:1\d{3}|20\d{2})\b/.test(sentence)) score += 3;
+  const names = sentence.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+/g);
+  if (names) score += Math.min(names.length, 3) * 2;
+  const facts = sentence.match(AI_FILL_FACT_TERMS);
+  if (facts) score += Math.min(facts.length, 3);
+  if (sentence.length < 40) score -= 1;
+  return score;
 }
 
-// Used on one slice of an over-long document: pull out only the facts a catalog
-// entry and its quiz could need, so the notes stay small no matter how long the
-// original was.
-const AI_FILL_CONDENSE_PROMPT = `You are a museum cataloging assistant. You receive ONE part of a longer reference document about a single museum item: a painting, sculpture, artifact, document, monument, heritage structure, or historic site.
+// Keep the opening paragraph (it names the item and its period) plus the
+// highest-scoring sentences in their original order, up to the budget.
+function condenseLocally(text, budget) {
+  const sentences = [];
+  const paragraphs = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((para) => para.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean);
 
-Pull out only the facts a catalog entry and its quiz could need, as short standalone notes. Keep exact names, dates, places, people, materials, dimensions, numbers, and events. Ignore bibliography, references, footnotes, copyright lines, navigation text, captions of unrelated images, and anything not about the item.
+  paragraphs.forEach((para, paraIndex) => {
+    const parts = para.match(/[^.!?]+[.!?]*\s*/g) || [para];
+    for (const part of parts) {
+      const sentence = part.trim();
+      if (!sentence) continue;
+      sentences.push({
+        text: sentence,
+        order: sentences.length,
+        para: paraIndex,
+        // Subscribe prompts, copyright lines, photo credits and the like never
+        // help a catalog entry, so they are not candidates at all.
+        junk: AI_FILL_BOILERPLATE.test(sentence),
+        score: scoreReferenceSentence(sentence) + (paraIndex === 0 ? 4 : 0),
+      });
+    }
+  });
 
-Reply with one valid JSON object and nothing else: {"facts":["short factual note","short factual note"]}. Give 15 to 30 notes. Never return an empty list.`;
+  const keep = new Set();
+  let used = 0;
+  const take = (sentence) => {
+    keep.add(sentence.order);
+    used += sentence.text.length + 1;
+  };
 
+  // The lead paragraph always survives, so the item still has a name.
+  for (const sentence of sentences) {
+    if (sentence.para !== 0 || sentence.junk) continue;
+    if (used + sentence.text.length > budget * 0.4) break;
+    take(sentence);
+  }
+
+  const ranked = sentences
+    .filter((sentence) => !sentence.junk)
+    .sort((a, b) => b.score - a.score || a.order - b.order);
+  for (const sentence of ranked) {
+    if (keep.has(sentence.order)) continue;
+    if (used + sentence.text.length + 1 > budget) continue;
+    take(sentence);
+    if (used >= budget) break;
+  }
+
+  // A page that is nearly all navigation and advertising leaves too little to
+  // work with, so fall back to that text rather than sending the model two lines.
+  if (used < budget * 0.5) {
+    for (const sentence of sentences) {
+      if (keep.has(sentence.order)) continue;
+      if (used + sentence.text.length + 1 > budget) continue;
+      take(sentence);
+      if (used >= budget) break;
+    }
+  }
+
+  return sentences
+    .filter((sentence) => keep.has(sentence.order))
+    .map((sentence) => sentence.text)
+    .join(" ");
+}
 
 // The Groq proxy substitutes a chat-style apology whenever the model returns no
 // content, and the failure arrives as HTTP 200. These values drive the retry
 // ladder further down so one bad generation no longer kills the whole fill.
 const AI_FILL_MAX_TOKENS = 2600;
-const AI_FILL_CONDENSE_TOKENS = 1600;
 const AI_FILL_ATTEMPTS = 3;
 const AI_FILL_RETRY_DELAY = 700;
 
-// Length budget for the pasted reference text. Up to AI_FILL_DIRECT_LIMIT goes
-// straight to the model; beyond that the text is condensed in AI_FILL_CHUNK_CHARS
-// slices first, which also keeps each request well inside Groq's per-minute token
-// budget. AI_FILL_HARD_LIMIT matches maxlength on the textarea in admin.html and
-// still leaves headroom under the proxy's 10-requests-per-minute limit.
+// Length budget for the pasted reference text. Anything up to
+// AI_FILL_DIRECT_LIMIT goes to the model untouched; longer text is trimmed to
+// AI_FILL_CONDENSED_BUDGET locally, so a whole article still fills the form in a
+// single request instead of a chain of them. AI_FILL_HARD_LIMIT matches
+// maxlength on the textarea in admin.html.
 const AI_FILL_DIRECT_LIMIT = 20000;
-const AI_FILL_CHUNK_CHARS = 15000;
+const AI_FILL_CONDENSED_BUDGET = 19000;
 const AI_FILL_HARD_LIMIT = 60000;
 
 // Keep the character counter beside the textarea honest, and flag the point where
@@ -461,11 +508,28 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
   if (!res.ok) {
     const detail = payload && payload.error ? payload.error : `API returned ${res.status} ${res.statusText}`;
     console.error("[AI] API error:", res.status, payload);
+    const retryAfter = Number(res.headers.get("retry-after"));
+    // A rate limit that lasts longer than a short pause is not worth sitting
+    // through: say so plainly instead of failing three times in a row.
+    if (res.status === 429 && retryAfter > 20) {
+      throw aiFillError(
+        `The AI is rate limited right now. Wait about ${Math.ceil(retryAfter)} seconds, then try again.`,
+        false,
+      );
+    }
     // 429 and 5xx are worth another attempt; a bad request or bad key is not.
-    throw aiFillError(detail, res.status === 429 || res.status >= 500);
+    const err = aiFillError(detail, res.status === 429 || res.status >= 500);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfter = retryAfter;
+    throw err;
   }
 
   const raw = String((payload && payload.content) || "").trim();
+  if (payload && payload.model === undefined) {
+    // Every current revision reports which model answered; a reply without it
+    // means the deployed function predates this page, which also means its
+    // 4,000-character cap is still in force.
+    console.warn("[AI] groq-proxy reply has no model field — the deployed function looks out of date. Redeploy groq-proxy.");
+  }
   if (payload && payload.model) console.log("[AI] Model:", payload.model, "finish:", payload.finishReason);
   if (!raw) throw aiFillError("The AI returned an empty answer.", true);
 
@@ -506,39 +570,11 @@ function applyAiFillResult(parsed) {
   return generatedQuiz.length;
 }
 
-// Condense an over-long document slice by slice, then hand the notes to the
-// normal extraction prompt. Every request stays small, so neither the proxy nor
-// the model has to swallow an unbounded prompt.
-async function condenseReference(text, onProgress) {
-  const chunks = splitReference(text, AI_FILL_CHUNK_CHARS);
-  const facts = [];
-
-  for (let i = 0; i < chunks.length; i++) {
-    if (onProgress) onProgress(`Reading the long reference text (part ${i + 1} of ${chunks.length})…`);
-    const parsed = await requestAiFill(
-      buildAiMessages(chunks[i]),
-      AI_FILL_CONDENSE_PROMPT,
-      AI_FILL_CONDENSE_TOKENS,
-    );
-    const list = Array.isArray(parsed.facts) ? parsed.facts : [];
-    for (const fact of list) {
-      const note = typeof fact === "string" ? fact.trim() : "";
-      if (note && !facts.includes(note)) facts.push(note);
-    }
-  }
-
-  if (!facts.length) {
-    throw aiFillError("The AI could not read the long reference text. Please try again.", true);
-  }
-
-  let digest = facts.map((fact) => `- ${fact}`).join("\n");
-  if (digest.length > AI_FILL_DIRECT_LIMIT) digest = digest.slice(0, AI_FILL_DIRECT_LIMIT);
-  return `Notes taken from a longer reference document:\n${digest}`;
-}
-
 // Decide how the pasted text reaches the model: as-is for a normal article,
-// condensed first when it is much longer than one request should carry.
-async function prepareAiText(raw, onProgress) {
+// trimmed to its fact-dense sentences when it is longer than one request should
+// carry. Either way the fill costs a single request, so a long paste can no
+// longer exhaust the per-minute rate limit with retries on top.
+function prepareAiText(raw, onProgress) {
   const text = String(raw || "").trim();
   if (text.length > AI_FILL_HARD_LIMIT) {
     throw aiFillError(
@@ -547,24 +583,37 @@ async function prepareAiText(raw, onProgress) {
     );
   }
   if (text.length <= AI_FILL_DIRECT_LIMIT) return text;
-  return condenseReference(text, onProgress);
+
+  if (onProgress) onProgress("Shortening the long reference text…");
+  const condensed = condenseLocally(text, AI_FILL_CONDENSED_BUDGET);
+  // A document with no sentence breaks cannot be trimmed by sentence; fall back
+  // to the plain character budget the proxy itself enforces.
+  return condensed.length >= 200 ? condensed : text.slice(0, AI_FILL_DIRECT_LIMIT);
 }
 
 // Attempts 2..N use the compact prompt. The first attempt keeps the full prompt
 // because it gives the best result when the model answers it correctly.
-async function aiFillWithRetries(preparedText) {
+async function aiFillWithRetries(preparedText, waitSeconds) {
   const messages = buildAiMessages(preparedText);
   let lastError = null;
+  let waitMs = waitSeconds > 0 ? Math.min(waitSeconds * 1000, 20000) : 0;
   for (let attempt = 2; attempt <= AI_FILL_ATTEMPTS; attempt++) {
-    aiModalStatus.textContent = `Retrying (${attempt} of ${AI_FILL_ATTEMPTS})…`;
+    // A 429 says how long to wait; retrying sooner only burns the remaining
+    // attempts against a budget that has not recovered yet.
+    const delay = waitMs || AI_FILL_RETRY_DELAY * (attempt - 1);
+    aiModalStatus.textContent = waitMs
+      ? `Rate limited — retrying in ${Math.ceil(delay / 1000)}s…`
+      : `Retrying (${attempt} of ${AI_FILL_ATTEMPTS})…`;
     aiModalStatus.className = "ai-status";
-    await sleep(AI_FILL_RETRY_DELAY * (attempt - 1));
+    await sleep(delay);
+    waitMs = 0;
     try {
       return await requestAiFill(messages, AI_FILL_COMPACT_PROMPT);
     } catch (err) {
       console.warn(`[AI] Retry ${attempt} failed:`, err.message);
       lastError = err;
       if (err.retryable === false) break;
+      if (err.retryAfter) waitMs = Math.min(err.retryAfter * 1000, 20000);
     }
   }
   throw lastError || aiFillError("The AI could not fill the form.", true);
@@ -582,11 +631,11 @@ btnAiSubmit.addEventListener("click", async () => {
   aiModalStatus.className = "ai-status";
   btnAiSubmit.disabled = true;
 
-  // A very long reference text is condensed first, so no single request is
-  // oversized and the model still sees every part of the document.
+  // A very long reference text is trimmed to its fact-dense sentences here, so
+  // the whole document still goes out as one request.
   let preparedText = query;
   try {
-    preparedText = await prepareAiText(query, (message) => {
+    preparedText = prepareAiText(query, (message) => {
       aiModalStatus.textContent = message;
       aiModalStatus.className = "ai-status";
     });
@@ -676,7 +725,7 @@ Output: {"title":"Puente de Malabon (Malabon Bridge)","artist":null,"year":"19th
       return;
     }
     try {
-      const parsed = await aiFillWithRetries(preparedText);
+      const parsed = await aiFillWithRetries(preparedText, err.retryAfter);
       console.log("[AI] Retry succeeded:", parsed);
       applyAiFillResult(parsed);
     } catch (retryErr) {
