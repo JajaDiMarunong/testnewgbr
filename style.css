@@ -856,24 +856,143 @@ button.corner-fabs-right {
 .unlock-card .modal-desc::-webkit-scrollbar-thumb { background: rgba(201, 168, 118, 0.45); border-radius: 999px; }
 .modal-badge.scanned { background: var(--frame-gold); }
 
+/* ---------------- celebratory badge unlock modal ---------------- */
+.badge-unlock-card {
+  position: relative;
+  background: rgba(26, 22, 19, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(201, 168, 118, 0.65);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(201, 168, 118, 0.22);
+  border-radius: 22px;
+  padding: 30px 22px 22px;
+  max-width: 340px;
+  overflow: hidden;
+  animation: badgeCardEntrance 0.38s cubic-bezier(0.18, 0.9, 0.28, 1) forwards;
+}
+
+@keyframes badgeCardEntrance {
+  0% { opacity: 0; transform: scale(0.82) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.badge-unlock-glow {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(201, 168, 118, 0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.badge-unlock-emblem-wrap {
+  margin: 0 auto 14px;
+  width: 82px;
+  height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.badge-unlock-emblem {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(201, 168, 118, 0.32) 0%, rgba(24, 21, 19, 0.95) 75%);
+  border: 2px solid var(--frame-gold);
+  box-shadow: 0 0 26px rgba(201, 168, 118, 0.45), inset 0 0 16px rgba(201, 168, 118, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badgeEmblemPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes badgeEmblemPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 24px rgba(201, 168, 118, 0.4), inset 0 0 14px rgba(201, 168, 118, 0.25); }
+  50% { transform: scale(1.05); box-shadow: 0 0 34px rgba(201, 168, 118, 0.65), inset 0 0 20px rgba(201, 168, 118, 0.45); }
+}
+
+.badge-modal-icon-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+
+.badge-unlock-eyebrow {
+  color: var(--frame-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0 0 8px 0;
+}
+
+.badge-modal-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  color: var(--text);
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.badge-modal-desc {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+/* ---------------- celebratory confetti shower ---------------- */
 .unlock-confetti {
   position: fixed; inset: 0; z-index: 60; overflow: hidden;
   pointer-events: none;
 }
 .confetti-piece {
-  position: absolute; left: 50%; top: 34%;
-  width: 8px; height: 14px; border-radius: 2px;
-  background: var(--color); opacity: 0;
-  animation: unlockConfettiBurst var(--duration) cubic-bezier(0.2, 0.8, 0.25, 1) var(--delay) forwards;
+  position: absolute;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: unlockConfettiBurst var(--duration) cubic-bezier(0.16, 0.82, 0.24, 1) var(--delay) forwards;
 }
+
+.confetti-piece.shape-ribbon {
+  width: 6px; height: 16px; border-radius: 2px;
+}
+.confetti-piece.shape-square {
+  width: 8px; height: 8px; border-radius: 1px;
+}
+.confetti-piece.shape-circle {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.confetti-piece.shape-diamond {
+  width: 7px; height: 7px; transform-origin: center;
+}
+
 @keyframes unlockConfettiBurst {
-  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); }
-  18% { opacity: 1; transform: translate(calc(-50% + var(--mid-x)), calc(-50% + var(--mid-y))) rotate(var(--rotate)); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--rotate)); }
+  0% {
+    opacity: 1;
+    transform: translate3d(var(--start-x, 0px), var(--start-y, 0px), 0) scale(0.3) rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+  }
+  22% {
+    opacity: 1;
+    transform: translate3d(calc(var(--start-x, 0px) + var(--mid-x, 0px)), calc(var(--start-y, 0px) + var(--mid-y, 0px)), 0) scale(1) rotateX(var(--rot-x-mid, 180deg)) rotateY(var(--rot-y-mid, 180deg)) rotateZ(var(--rot-z-mid, 90deg));
+  }
+  75% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--start-x, 0px) + var(--end-x, 0px)), calc(var(--start-y, 0px) + var(--end-y, 0px)), 0) scale(0.85) rotateX(var(--rot-x-end, 540deg)) rotateY(var(--rot-y-end, 540deg)) rotateZ(var(--rot-z-end, 360deg));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .unlock-confetti { display: none; }
+  .badge-unlock-card { animation: none; }
+  .badge-unlock-emblem { animation: none; }
 }
 .modal-badge {
   width: 48px; height: 48px; border-radius: 50%; background: var(--success);

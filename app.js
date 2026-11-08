@@ -135,6 +135,13 @@ const unlockEyebrow = document.getElementById("unlock-eyebrow");
 const unlockBadge = document.getElementById("unlock-badge");
 const unlockConfetti = document.getElementById("unlock-confetti");
 
+const badgeUnlockModal = document.getElementById("badge-unlock-modal");
+const badgeModalIcon = document.getElementById("badge-modal-icon");
+const badgeModalTitle = document.getElementById("badge-modal-title");
+const badgeModalDesc = document.getElementById("badge-modal-desc");
+const btnBadgeDismiss = document.getElementById("btn-badge-dismiss");
+const btnBadgeView = document.getElementById("btn-badge-view");
+
 const badgeToast = document.getElementById("badge-toast");
 const badgeToastIcon = document.getElementById("badge-toast-icon");
 const badgeToastText = document.getElementById("badge-toast-text");
@@ -626,45 +633,163 @@ function showUnlockModal(art, wasAlreadyUnlocked) {
   unlockModal.classList.remove("hidden");
 }
 
-function celebrateFirstUnlock() {
+let confettiCleanupTimer = null;
+function triggerConfettiCelebration(options = {}) {
+  const count = options.count || 105;
+  const isDual = options.dual ?? true;
   unlockConfetti.innerHTML = "";
-  const colors = ["#c9a876", "#f4d35e", "#6faa82", "#9fc6e0", "#f2a19b", "#f4f1ea"];
+  clearTimeout(confettiCleanupTimer);
 
-  for (let i = 0; i < 72; i++) {
+  const colors = [
+    "#c9a876", // Museum gold
+    "#f4d35e", // Bright gold
+    "#ffd700", // Gilt amber
+    "#6faa82", // Emerald sage
+    "#34d399", // Mint green
+    "#9fc6e0", // Gallery sky
+    "#38bdf8", // Vivid blue
+    "#f2a19b", // Warm coral
+    "#ef4444", // Festive ruby
+    "#f4f1ea", // Gallery pearl
+    "#ffffff", // Shimmer white
+  ];
+  const shapes = ["shape-ribbon", "shape-square", "shape-circle", "shape-diamond"];
+
+  const fragment = document.createDocumentFragment();
+  const screenW = window.innerWidth || 360;
+  const screenH = window.innerHeight || 640;
+
+  for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
-    const angle = (Math.PI * 2 * i) / 72 + (Math.random() - 0.5) * 0.35;
-    const distance = 120 + Math.random() * 260;
-    const x = Math.cos(angle) * distance;
-    const y = Math.sin(angle) * distance + 220;
-    piece.className = "confetti-piece";
-    piece.style.setProperty("--color", colors[i % colors.length]);
-    piece.style.setProperty("--x", `${x}px`);
-    piece.style.setProperty("--y", `${y}px`);
-    piece.style.setProperty("--mid-x", `${x * 0.42}px`);
-    piece.style.setProperty("--mid-y", `${y * 0.24}px`);
-    piece.style.setProperty("--rotate", `${Math.random() * 720 - 360}deg`);
-    piece.style.setProperty("--delay", `${Math.random() * 90}ms`);
-    piece.style.setProperty("--duration", `${900 + Math.random() * 650}ms`);
-    unlockConfetti.appendChild(piece);
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    piece.className = `confetti-piece ${shape}`;
+
+    let startX, startY, midX, midY, endX, endY;
+
+    if (isDual) {
+      const fromLeft = i % 2 === 0;
+      startX = fromLeft ? screenW * 0.12 : screenW * 0.88;
+      startY = screenH * 0.52;
+
+      const spreadAngle = fromLeft
+        ? -Math.PI * 0.28 - Math.random() * 0.38
+        : -Math.PI * 0.72 + Math.random() * 0.38;
+      const power = 250 + Math.random() * 320;
+
+      midX = Math.cos(spreadAngle) * power;
+      midY = Math.sin(spreadAngle) * (power * 0.95);
+
+      endX = midX + (Math.random() - 0.5) * 160;
+      endY = midY + 440 + Math.random() * 260;
+    } else {
+      startX = screenW * 0.5;
+      startY = screenH * 0.38;
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+      const dist = 140 + Math.random() * 280;
+      midX = Math.cos(angle) * (dist * 0.55);
+      midY = Math.sin(angle) * (dist * 0.55) - 60;
+      endX = Math.cos(angle) * dist + (Math.random() - 0.5) * 80;
+      endY = Math.sin(angle) * dist + 320 + Math.random() * 220;
+    }
+
+    const rotXMid = Math.random() * 360 + 90;
+    const rotYMid = Math.random() * 360 + 90;
+    const rotZMid = Math.random() * 240 - 120;
+    const rotXEnd = rotXMid + Math.random() * 720;
+    const rotYEnd = rotYMid + Math.random() * 720;
+    const rotZEnd = rotZMid + (Math.random() * 720 - 360);
+
+    const delay = Math.random() * 200;
+    const duration = 2100 + Math.random() * 950;
+
+    piece.style.backgroundColor = colors[i % colors.length];
+    piece.style.setProperty("--start-x", `${startX}px`);
+    piece.style.setProperty("--start-y", `${startY}px`);
+    piece.style.setProperty("--mid-x", `${midX}px`);
+    piece.style.setProperty("--mid-y", `${midY}px`);
+    piece.style.setProperty("--end-x", `${endX}px`);
+    piece.style.setProperty("--end-y", `${endY}px`);
+    piece.style.setProperty("--rot-x-mid", `${rotXMid}deg`);
+    piece.style.setProperty("--rot-y-mid", `${rotYMid}deg`);
+    piece.style.setProperty("--rot-z-mid", `${rotZMid}deg`);
+    piece.style.setProperty("--rot-x-end", `${rotXEnd}deg`);
+    piece.style.setProperty("--rot-y-end", `${rotYEnd}deg`);
+    piece.style.setProperty("--rot-z-end", `${rotZEnd}deg`);
+    piece.style.setProperty("--delay", `${delay}ms`);
+    piece.style.setProperty("--duration", `${duration}ms`);
+
+    fragment.appendChild(piece);
   }
 
-  setTimeout(() => {
+  unlockConfetti.appendChild(fragment);
+
+  confettiCleanupTimer = setTimeout(() => {
     unlockConfetti.innerHTML = "";
-  }, 1900);
+  }, 3300);
 }
+
+function celebrateFirstUnlock() {
+  triggerConfettiCelebration({ count: 110, dual: true });
+}
+
+let pendingBadgeUnlocks = [];
 
 function hideUnlockModal() {
   unlockModal.classList.add("hidden");
+  if (pendingBadgeUnlocks.length > 0) {
+    const nextBadge = pendingBadgeUnlocks.shift();
+    setTimeout(() => showBadgeUnlockModal(nextBadge), 320);
+  }
 }
 btnKeepScanning.addEventListener("click", hideUnlockModal);
 btnViewCollection.addEventListener("click", () => {
   hideUnlockModal();
   showHome();
 });
+unlockModal.addEventListener("click", (e) => {
+  if (e.target === unlockModal) hideUnlockModal();
+});
 
 // -------------------------------------------------------------------
-// Badge toast + awarding
+// Badge celebratory modal + toast + awarding
 // -------------------------------------------------------------------
+function showBadgeUnlockModal(badge) {
+  if (unlockModal && !unlockModal.classList.contains("hidden")) {
+    if (!pendingBadgeUnlocks.some((b) => b.id === badge.id)) {
+      pendingBadgeUnlocks.push(badge);
+    }
+    return;
+  }
+
+  badgeModalTitle.textContent = badge.name;
+  badgeModalDesc.textContent = badge.description;
+  if (badge.icon && badge.icon.startsWith("./assets/")) {
+    badgeModalIcon.src = badge.icon;
+  } else {
+    badgeModalIcon.src = "./assets/icons/badge.png";
+  }
+
+  badgeUnlockModal.classList.remove("hidden");
+  triggerConfettiCelebration({ count: 120, dual: true });
+}
+
+function hideBadgeUnlockModal() {
+  badgeUnlockModal.classList.add("hidden");
+  if (pendingBadgeUnlocks.length > 0) {
+    const nextBadge = pendingBadgeUnlocks.shift();
+    setTimeout(() => showBadgeUnlockModal(nextBadge), 320);
+  }
+}
+
+btnBadgeDismiss.addEventListener("click", hideBadgeUnlockModal);
+btnBadgeView.addEventListener("click", () => {
+  hideBadgeUnlockModal();
+  showBadges();
+});
+badgeUnlockModal.addEventListener("click", (e) => {
+  if (e.target === badgeUnlockModal) hideBadgeUnlockModal();
+});
+
 let badgeToastTimer = null;
 function showBadgeToast(badge) {
   if (badge.icon && badge.icon.startsWith("./assets/")) {
@@ -684,6 +809,7 @@ function awardBadge(key) {
   badge.earned = true;
   persistProgress();
   showBadgeToast(badge);
+  showBadgeUnlockModal(badge);
   checkAllBadgesBadge();
   if (allBadgesEarned()) updateNotesGate();
 }
@@ -1844,15 +1970,16 @@ function handleTargetFound(art, targetIndex, targetEl) {
   const firstTimeEver = !artworks.some((a) => a.unlocked);
   const wasAlreadyUnlocked = art.unlocked;
   art.unlocked = true;
-  if (firstTimeEver) awardBadge("firstScan");
   if (!wasAlreadyUnlocked && !sessionStartTime) sessionStartTime = Date.now();
   persistProgress();
-  checkAllUnlockedBadge();
   updateRunTimer();
 
   if (!wasAlreadyUnlocked) checkCollectionComplete();
   showUnlockModal(art, wasAlreadyUnlocked);
   if (!wasAlreadyUnlocked) celebrateFirstUnlock();
+
+  if (firstTimeEver) awardBadge("firstScan");
+  checkAllUnlockedBadge();
 }
 
 function handleTargetLost(targetIndex) {
