@@ -42,6 +42,8 @@ const BUILTIN_ARTWORKS = [
     scannable: true,
     published: true,
     inScavengerHunt: true,
+    quiz: [],
+    quizCompleted: false,
   },
 {
     id: "builtin-mcarthur",
@@ -65,6 +67,8 @@ const BUILTIN_ARTWORKS = [
     immersiveScale: 3.5,
     immersiveRotation: "0 270 0",
     markerRotation: "0 270 0",
+    quiz: [],
+    quizCompleted: false,
   },
 
 ];
@@ -80,27 +84,72 @@ const badges = {
     id: "firstScan",
     name: "First Scan",
     description: "Scan your very first artwork",
-    icon: "./assets/icons/arcamera.png",
+    icon: "./assets/icons/arcamera.webp",
+    earned: false,
+  },
+  firstQuiz: {
+    id: "firstQuiz",
+    name: "First Quiz",
+    description: "Complete your first artwork quiz",
+    icon: "./assets/icons/badge.webp",
     earned: false,
   },
   allUnlocked: {
     id: "allUnlocked",
     name: "All Unlocked",
     description: "Unlock every artwork in the collection",
-    icon: "./assets/icons/artwork.png",
+    icon: "./assets/icons/artwork.webp",
+    earned: false,
+  },
+  allQuizzes: {
+    id: "allQuizzes",
+    name: "All Quizzes",
+    description: "Complete every artwork quiz",
+    icon: "./assets/icons/leaderboard.webp",
     earned: false,
   },
   allBadges: {
     id: "allBadges",
     name: "All Badges",
     description: "Collect every other badge",
-    icon: "./assets/icons/badge.png",
+    icon: "./assets/icons/badge.webp",
     earned: false,
   },
 };
 
 function allBadgesEarned() {
   return Object.values(badges).every((b) => b.earned);
+}
+
+function normalizeQuiz(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const question = String(item.question || "").trim();
+      const rawOptions = Array.isArray(item.options)
+        ? item.options.map((option) => String(option ?? "").trim())
+        : [];
+      const entries = rawOptions
+        .map((text, index) => ({ text, index }))
+        .filter((entry) => entry.text);
+      if (!question || entries.length < 2) return null;
+      let correctIndex = entries.findIndex((entry) => entry.index === Number(item.correctIndex));
+      if (correctIndex === -1) correctIndex = 0;
+      return { question, options: entries.map((entry) => entry.text), correctIndex };
+    })
+    .filter(Boolean);
+}
+
+function artworkHasQuiz(art) {
+  return Array.isArray(art.quiz) && art.quiz.length > 0;
+}
+
+function getQuizStatus(art) {
+  if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz" };
+  if (art.quizCompleted) return { state: "done", label: "✓ Quiz done" };
+  if (!art.unlocked) return { state: "locked", label: "Quiz not taken" };
+  return { state: "pending", label: "Quiz not taken" };
 }
 
 // -------------------------------------------------------------------
@@ -113,6 +162,7 @@ const btnUsernameSubmit = document.getElementById("btn-username-submit");
 const screenHome = document.getElementById("screen-home");
 const screenScanner = document.getElementById("screen-scanner");
 const screenDetail = document.getElementById("screen-detail");
+const screenQuiz = document.getElementById("screen-quiz");
 const screenBadges = document.getElementById("screen-badges");
 const screenLeaderboard = document.getElementById("screen-leaderboard");
 
@@ -162,6 +212,14 @@ const detailImage = document.getElementById("detail-image");
 const detailTitle = document.getElementById("detail-title");
 const detailText = document.getElementById("detail-text");
 const btnDetailBack = document.getElementById("btn-detail-back");
+const btnTakeQuiz = document.getElementById("btn-take-quiz");
+const quizDoneNote = document.getElementById("quiz-done-note");
+const quizProgress = document.getElementById("quiz-progress");
+const quizQuestion = document.getElementById("quiz-question");
+const quizOptions = document.getElementById("quiz-options");
+const quizFeedback = document.getElementById("quiz-feedback");
+const btnQuizNext = document.getElementById("btn-quiz-next");
+const btnQuizBack = document.getElementById("btn-quiz-back");
 
 const btnOpenBadges = document.getElementById("btn-open-badges");
 const btnBadgesBack = document.getElementById("btn-badges-back");
@@ -306,6 +364,7 @@ function persistProgress() {
   const progress = {
     username: currentUsername,
     unlocked: artworks.filter((art) => art.unlocked).map((art) => art.id),
+    quizCompleted: artworks.filter((art) => art.quizCompleted).map((art) => art.id),
     badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned])),
     sessionStartTime,
     finalElapsedSeconds,
@@ -323,8 +382,10 @@ function restoreProgress() {
     finalElapsedSeconds = progress.finalElapsedSeconds ?? null;
     leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
     const unlocked = new Set(progress.unlocked || []);
+    const quizCompleted = new Set(progress.quizCompleted || []);
     artworks.forEach((art) => {
       art.unlocked = unlocked.has(art.id);
+      art.quizCompleted = quizCompleted.has(art.id);
     });
     Object.entries(progress.badges || {}).forEach(([key, earned]) => {
       if (badges[key]) badges[key].earned = Boolean(earned);
@@ -485,12 +546,14 @@ function renderGallery() {
     const card = document.createElement("div");
     card.className = "art-card " + (art.unlocked ? "unlocked" : "locked");
     card.style.setProperty("--i", Math.min(index, 8));
+    const quizStatus = getQuizStatus(art);
 
     card.innerHTML = `
       <img class="art-card-img" src="${art.image}" alt="${art.name}"
            onerror="this.style.display='none'; this.closest('.art-card').querySelector('.art-card-fallback').style.display='flex';" />
       <div class="art-card-fallback" style="display:none;">${art.icon}</div>
       <div class="art-card-scrim"></div>
+      <div class="quiz-status-pill ${quizStatus.state}">${quizStatus.label}</div>
       <div class="status-badge ${art.unlocked ? "unlocked" : ""}">${art.unlocked ? "✓ Unlocked" : "🔒 Locked"}</div>
       <div class="art-card-caption">
         <h3>${art.name}</h3>
@@ -539,6 +602,7 @@ function hideAllScreens() {
   screenHome.classList.add("hidden");
   screenScanner.classList.add("hidden");
   screenDetail.classList.add("hidden");
+  screenQuiz.classList.add("hidden");
   screenBadges.classList.add("hidden");
   screenLeaderboard.classList.add("hidden");
   screenLibrary.classList.add("hidden");
@@ -627,7 +691,7 @@ function showUnlockModal(art, wasAlreadyUnlocked) {
 
   const firstUnlock = art.showInMainCollection !== false && !wasAlreadyUnlocked;
   unlockEyebrow.textContent = firstUnlock ? "Artwork Unlocked" : "Artwork Scanned";
-  unlockBadge.innerHTML = firstUnlock ? "✓" : '<img src="./assets/icons/arcamera.png" alt="Scanned" class="modal-badge-img" />';
+  unlockBadge.innerHTML = firstUnlock ? "✓" : '<img src="./assets/icons/arcamera.webp" alt="Scanned" class="modal-badge-img" />';
   unlockBadge.classList.toggle("scanned", !firstUnlock);
 
   unlockModal.classList.remove("hidden");
@@ -766,7 +830,7 @@ function showBadgeUnlockModal(badge) {
   if (badge.icon && badge.icon.startsWith("./assets/")) {
     badgeModalIcon.src = badge.icon;
   } else {
-    badgeModalIcon.src = "./assets/icons/badge.png";
+    badgeModalIcon.src = "./assets/icons/badge.webp";
   }
 
   badgeUnlockModal.classList.remove("hidden");
@@ -795,7 +859,7 @@ function showBadgeToast(badge) {
   if (badge.icon && badge.icon.startsWith("./assets/")) {
     badgeToastIcon.innerHTML = `<img src="${badge.icon}" alt="${badge.name}" class="badge-toast-img" />`;
   } else {
-    badgeToastIcon.innerHTML = `<img src="./assets/icons/badge.png" alt="Badge" class="badge-toast-img" />`;
+    badgeToastIcon.innerHTML = `<img src="./assets/icons/badge.webp" alt="Badge" class="badge-toast-img" />`;
   }
   badgeToastText.textContent = `Badge earned: ${badge.name}`;
   badgeToast.classList.remove("hidden");
@@ -821,6 +885,11 @@ function getCollectionArtworks() {
 function checkAllUnlockedBadge() {
   const collection = getCollectionArtworks();
   if (collection.length > 0 && collection.every((a) => a.unlocked)) awardBadge("allUnlocked");
+}
+
+function checkAllQuizzesBadge() {
+  const quizArtworks = getCollectionArtworks().filter((a) => artworkHasQuiz(a));
+  if (quizArtworks.length > 0 && quizArtworks.every((a) => a.quizCompleted)) awardBadge("allQuizzes");
 }
 
 function checkAllBadgesBadge() {
@@ -1118,6 +1187,11 @@ function openDetail(artworkId) {
   detailTitle.textContent = art.name;
   detailText.textContent = art.details;
 
+  const hasQuiz = artworkHasQuiz(art);
+  btnTakeQuiz.classList.toggle("hidden", !hasQuiz);
+  btnTakeQuiz.textContent = art.quizCompleted ? "Retake the Quiz" : "Take the Quiz";
+  quizDoneNote.classList.toggle("hidden", !art.quizCompleted);
+
   const hasImmersive = !!art.immersiveSkybox;
   btnImmersive.classList.toggle("hidden", !hasImmersive);
   btnImmersive.onclick = () => startImmersive(art);
@@ -1128,6 +1202,96 @@ function openDetail(artworkId) {
 }
 
 btnDetailBack.addEventListener("click", showHome);
+
+// -------------------------------------------------------------------
+// Artwork quizzes
+// -------------------------------------------------------------------
+let quizArtId = null;
+let quizIndex = 0;
+
+function startQuiz(artworkId) {
+  const art = artworks.find((a) => a.id === artworkId);
+  if (!art || !artworkHasQuiz(art)) return;
+
+  quizArtId = artworkId;
+  quizIndex = 0;
+
+  hideAllScreens();
+  screenQuiz.classList.remove("hidden");
+  bottomNav.classList.add("hidden");
+  renderQuizQuestion();
+}
+
+function renderQuizQuestion() {
+  const art = artworks.find((a) => a.id === quizArtId);
+  if (!art) return;
+  const question = art.quiz[quizIndex];
+
+  quizProgress.textContent = `Question ${quizIndex + 1} / ${art.quiz.length}`;
+  quizQuestion.textContent = question.question;
+  quizFeedback.classList.add("hidden");
+  quizFeedback.className = "quiz-feedback hidden";
+  btnQuizNext.classList.add("hidden");
+  btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "Finish Quiz" : "Next Question";
+
+  quizOptions.innerHTML = "";
+  question.options.forEach((option, optionIndex) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quiz-option-btn";
+    button.textContent = option;
+    button.addEventListener("click", () => selectQuizAnswer(optionIndex));
+    quizOptions.appendChild(button);
+  });
+}
+
+function selectQuizAnswer(selectedIndex) {
+  const art = artworks.find((a) => a.id === quizArtId);
+  if (!art) return;
+  const question = art.quiz[quizIndex];
+  const optionButtons = quizOptions.querySelectorAll(".quiz-option-btn");
+  const isCorrect = selectedIndex === question.correctIndex;
+
+  optionButtons.forEach((button, index) => {
+    button.disabled = true;
+    if (index === question.correctIndex) button.classList.add("correct");
+    else if (index === selectedIndex) button.classList.add("incorrect");
+  });
+
+  quizFeedback.textContent = isCorrect
+    ? "Correct!"
+    : "Not quite — the highlighted answer was correct.";
+  quizFeedback.className = "quiz-feedback " + (isCorrect ? "correct" : "incorrect");
+  btnQuizNext.classList.remove("hidden");
+}
+
+btnQuizNext.addEventListener("click", () => {
+  const art = artworks.find((a) => a.id === quizArtId);
+  if (!art) return;
+
+  if (quizIndex < art.quiz.length - 1) {
+    quizIndex++;
+    renderQuizQuestion();
+    return;
+  }
+
+  const wasCompleted = art.quizCompleted;
+  const firstCompletionAnywhere = !artworks.some((a) => a.quizCompleted);
+  art.quizCompleted = true;
+  persistProgress();
+  if (!wasCompleted && firstCompletionAnywhere) awardBadge("firstQuiz");
+  checkAllQuizzesBadge();
+  openDetail(quizArtId);
+});
+
+btnQuizBack.addEventListener("click", () => {
+  if (quizArtId) openDetail(quizArtId);
+  else showHome();
+});
+
+btnTakeQuiz.addEventListener("click", () => {
+  if (currentDetailArtId) startQuiz(currentDetailArtId);
+});
 
 // -------------------------------------------------------------------
 // Firebase: leaderboard
@@ -2302,6 +2466,8 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
           scannable: val.scannable !== false,
           published: val.published !== false,
           inScavengerHunt: val.inScavengerHunt !== false,
+          quiz: normalizeQuiz(val.quiz),
+          quizCompleted: false,
         }));
         merged = merged.concat(uploaded);
       }
@@ -2320,10 +2486,13 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
       const settings = await settingsRes.json();
       if (settings) {
         merged = merged.map((art) => {
-          const override = settings[art.id]?.inScavengerHunt;
+          const saved = settings[art.id] || {};
+          const override = saved.inScavengerHunt;
           return {
             ...art,
             inScavengerHunt: override !== undefined ? override !== false : art.inScavengerHunt !== false,
+            quiz: normalizeQuiz(saved.quiz || art.quiz),
+            quizCompleted: false,
           };
         });
       }
@@ -2382,15 +2551,15 @@ startPresenceHeartbeat();
 const TOUR_STEPS = [
   {
     target: null,
-    illustration: "./assets/icons/artwork.png",
+    illustration: "./assets/icons/artwork.webp",
     title: "Welcome to the GBR Museum!",
-    text: "Your personal gallery awaits. Scan artworks with AR to unlock hidden stories and collect badges along the way.",
+    text: "Your personal gallery awaits. Scan artworks with AR to unlock hidden stories, take quizzes, and collect badges along the way.",
   },
   {
     target: "#gallery-grid",
     illustration: "🔒",
     title: "Artwork Cards",
-    text: "These cards represent real artworks on display. Locked ones are hidden until you scan them with the AR camera.",
+    text: "These cards represent real artworks on display. The label shows whether a quiz is available or already completed. Locked artworks are hidden until you scan them with the AR camera.",
   },
   {
     target: ".filter-row",
@@ -2400,19 +2569,19 @@ const TOUR_STEPS = [
   },
   {
     target: ".progress-row",
-    illustration: "./assets/icons/leaderboard.png",
+    illustration: "./assets/icons/leaderboard.webp",
     title: "Track Your Progress",
     text: "Watch your completion bar fill up as you unlock artworks. Complete them all to earn a spot on the leaderboard!",
   },
   {
     target: ".corner-fabs-left",
-    illustration: "./assets/icons/badge.png",
+    illustration: "./assets/icons/badge.webp",
     title: "Badges & Library",
     text: "View your earned badges, browse the full artwork library (no camera needed), or change your display name anytime.",
   },
   {
     target: "#bottom-nav",
-    illustration: "./assets/icons/arcamera.png",
+    illustration: "./assets/icons/arcamera.webp",
     title: "AR Camera",
     text: "Tap the AR Camera tab to launch the scanner. Point your camera at any artwork to instantly unlock its story!",
   },
@@ -2671,6 +2840,7 @@ async function bootMuseum() {
     await initArtworks();
     restoreProgress();
     checkAllUnlockedBadge();
+    checkAllQuizzesBadge();
     if (currentUsername) {
       screenUsername.classList.add("hidden");
       showHome();

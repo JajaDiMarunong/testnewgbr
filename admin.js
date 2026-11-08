@@ -107,6 +107,8 @@ const artworkDrawer = document.getElementById("artwork-drawer");
 const artworkDrawerBackdrop = document.getElementById("artwork-drawer-backdrop");
 const artworkDrawerTitle = document.getElementById("artwork-drawer-title");
 const artworkDrawerEyebrow = document.getElementById("artwork-drawer-eyebrow");
+const quizEditorList = document.getElementById("quiz-editor-list");
+const btnAddQuizQuestion = document.getElementById("btn-add-quiz-question");
 const artworkSearchInput = document.getElementById("artwork-search");
 const artworkHuntFilter = document.getElementById("artwork-hunt-filter");
 const artworkSelectAll = document.getElementById("artwork-select-all");
@@ -317,33 +319,28 @@ btnAiSubmit.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: [{ role: "user", content: query }],
-        systemPrompt: `You are a museum cataloging assistant. The user pasted information about an artwork. Extract the following fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description.
+        systemPrompt: `You are a museum cataloging assistant. The user pasted information about an artwork. Extract the following fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
 
 CRITICAL RULES:
 1. Return ONLY the JSON object. No markdown, no explanations, no text before or after.
 2. The description must be 2-3 sentences maximum. Keep it short so the JSON fits in the response.
-3. If a field cannot be determined, use null. BUT — infer intelligently:
+3. quiz must be an array of 3 multiple-choice questions about the artwork. Each item must use this shape: {"question":"...","options":["...","...","...","..."],"correctIndex":0}. Every question must have exactly 4 options. correctIndex is the zero-based index of the correct option. Questions must be answerable from the supplied artwork information, and wrong options should be plausible.
+4. If a field cannot be determined, use null. BUT — infer intelligently:
    - If no explicit title but the text centers on a specific person/figure/subject, use that subject's name as the title (e.g., "Portrait of [Name]" or just "[Name]")
    - If the text describes a historical figure, use their name as the title
    - If the text describes a specific artwork by name, use that name as the title
    - Extract artist from phrases like "by [Name]", "painted by [Name]", "created by [Name]", "sculpted by [Name]"
    - Extract year from any 4-digit year mentioned (1800-2025)
    - Extract location from museum names, cities, countries mentioned
-4. The JSON must be complete and valid — do not cut it off.
-5. Use null ONLY when truly no information exists for that field.
+5. The JSON must be complete and valid — do not cut it off. Keep wording concise so the full JSON fits.
+6. Use null ONLY when truly no information exists for that field. Never use null for quiz; always provide 3 questions.
 
 Examples:
 Input: "The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."
-Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art."}
+Output: {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted by Van Gogh in 1889. One of the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was The Starry Night painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is The Starry Night permanently displayed?","options":["MoMA, New York","The Louvre, Paris","National Gallery, London","Prado Museum, Madrid"],"correctIndex":0}]}
 
 Input: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal. Undated. Located at GBR Jr. Museum, General Trias, Philippines."
-Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal."}
-
-Input: "This is a painting of Jose Rizal, the Philippine national hero. It was painted by Fabian de la Rosa in 1910. The artwork shows Rizal in a formal pose."
-Output: {"title":"Portrait of Jose Rizal","artist":"Fabian de la Rosa","year":"1910","location":null,"description":"Portrait of Philippine national hero Jose Rizal, painted by Fabian de la Rosa in 1910."}
-
-Input: "A sculpture of Andres Bonifacio by Guillermo Tolentino. Created in 1930. Currently displayed at the University of the Philippines."
-Output: {"title":"Andres Bonifacio","artist":"Guillermo Tolentino","year":"1930","location":"University of the Philippines","description":"Sculpture of Philippine revolutionary Andres Bonifacio by Guillermo Tolentino, created in 1930."}`,
+Output: {"title":"Portrait of Crisanto de los Reyes y Mendoza","artist":"Rafael del Casal","year":"Undated","location":"GBR Jr. Museum, General Trias, Philippines","description":"Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.","quiz":[{"question":"Who painted the portrait of Crisanto de los Reyes y Mendoza?","options":["Rafael del Casal","Juan Luna","Felix Hidalgo","Fabian de la Rosa"],"correctIndex":0},{"question":"Where is this portrait located?","options":["GBR Jr. Museum, General Trias","National Museum, Manila","Ayala Museum, Makati","The Louvre, Paris"],"correctIndex":0},{"question":"What year is listed for this portrait?","options":["Undated","1889","1910","1930"],"correctIndex":0}]}`,
         jsonMode: true,
       }),
     });
@@ -398,7 +395,12 @@ Output: {"title":"Andres Bonifacio","artist":"Guillermo Tolentino","year":"1930"
     if (parsed.location !== undefined) document.getElementById("artwork-location").value = parsed.location || "";
     if (parsed.description) document.getElementById("artwork-details").value = parsed.description;
 
-    aiModalStatus.textContent = "✅ Fields filled! Closing…";
+    const generatedQuiz = sanitizeQuiz(parsed.quiz);
+    if (generatedQuiz.length > 0) renderQuizEditor(generatedQuiz);
+
+    aiModalStatus.textContent = generatedQuiz.length > 0
+      ? "✅ Fields and quiz filled! Closing…"
+      : "✅ Fields filled! Closing…";
     aiModalStatus.className = "ai-status success";
 
     setTimeout(() => {
@@ -1059,8 +1061,141 @@ function artworkThumb(art) {
   return art.imageUrl || art.image || "";
 }
 
+// ---------------------------------------------------------------------
+// Quiz builder
+// ---------------------------------------------------------------------
+let editingQuizOnly = false;
+let editingArtworkSource = null;
+let quizQuestionUid = 0;
+
+function sanitizeQuiz(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const question = String(item.question || "").trim();
+      const rawOptions = Array.isArray(item.options)
+        ? item.options.map((option) => String(option ?? "").trim())
+        : [];
+      const entries = rawOptions
+        .map((text, index) => ({ text, index }))
+        .filter((entry) => entry.text);
+      if (!question || entries.length < 2) return null;
+      let correctIndex = entries.findIndex((entry) => entry.index === Number(item.correctIndex));
+      if (correctIndex === -1) correctIndex = 0;
+      return { question, options: entries.map((entry) => entry.text), correctIndex };
+    })
+    .filter(Boolean);
+}
+
+function readQuizFromArtwork(art) {
+  const fromSettings = artworkSettingsCache[art.id]?.quiz;
+  return sanitizeQuiz(fromSettings || art.quiz || []);
+}
+
+function createQuizQuestionCard(question = "", options = [], correctIndex = 0) {
+  const card = document.createElement("div");
+  card.className = "quiz-question-card";
+  const uid = `quiz-question-${quizQuestionUid++}`;
+  const paddedOptions = options.slice(0, 4);
+  while (paddedOptions.length < 4) paddedOptions.push("");
+  const selectedIndex = Number.isInteger(correctIndex) ? correctIndex : 0;
+
+  card.innerHTML = `
+    <div class="quiz-question-head">
+      <span class="quiz-question-label">Question</span>
+      <button class="btn-tiny danger quiz-remove-btn" type="button">Remove</button>
+    </div>
+    <textarea class="note-textarea quiz-question-input" rows="2" placeholder="e.g. Who painted this artwork?"></textarea>
+    ${paddedOptions
+      .map(
+        (option, index) => `
+      <div class="quiz-option-row">
+        <input type="radio" name="${uid}" value="${index}" ${index === selectedIndex ? "checked" : ""} aria-label="Mark option ${index + 1} as the correct answer" />
+        <input class="text-input quiz-option-input" type="text" value="${escapeAttr(option)}" placeholder="Option ${index + 1}" />
+      </div>`
+      )
+      .join("")}
+    <p class="quiz-option-hint">Select the radio button next to the correct answer. Leave unused options blank.</p>
+  `;
+
+  card.querySelector(".quiz-question-input").value = question;
+  card.querySelector(".quiz-remove-btn").addEventListener("click", () => {
+    card.remove();
+    updateQuizEditorEmptyState();
+  });
+  return card;
+}
+
+function updateQuizEditorEmptyState() {
+  if (!quizEditorList) return;
+  const hasCards = quizEditorList.querySelector(".quiz-question-card");
+  let empty = quizEditorList.querySelector(".quiz-editor-empty");
+  if (!hasCards) {
+    if (!empty) {
+      empty = document.createElement("p");
+      empty.className = "quiz-editor-empty";
+      empty.textContent = 'No quiz questions yet. Click "+ Add Question" or use the AI Assistant to generate them.';
+      quizEditorList.appendChild(empty);
+    }
+  } else if (empty) {
+    empty.remove();
+  }
+}
+
+function renderQuizEditor(quiz) {
+  if (!quizEditorList) return;
+  quizEditorList.innerHTML = "";
+  sanitizeQuiz(quiz).forEach((question) => {
+    quizEditorList.appendChild(
+      createQuizQuestionCard(question.question, question.options, question.correctIndex)
+    );
+  });
+  updateQuizEditorEmptyState();
+}
+
+function addQuizQuestion(question = "", options = [], correctIndex = 0) {
+  if (!quizEditorList) return null;
+  quizEditorList.querySelector(".quiz-editor-empty")?.remove();
+  const card = createQuizQuestionCard(question, options, correctIndex);
+  quizEditorList.appendChild(card);
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return card;
+}
+
+function collectQuizFromEditor() {
+  if (!quizEditorList) return [];
+  const quiz = [];
+  quizEditorList.querySelectorAll(".quiz-question-card").forEach((card) => {
+    const question = card.querySelector(".quiz-question-input").value.trim();
+    if (!question) return;
+
+    const optionInputs = Array.from(card.querySelectorAll(".quiz-option-input"));
+    const checked = card.querySelector('input[type="radio"]:checked');
+    const rawCorrectIndex = checked ? Number(checked.value) : 0;
+    const options = optionInputs
+      .map((input, index) => ({ text: input.value.trim(), index }))
+      .filter((entry) => entry.text);
+
+    if (options.length < 2) return;
+    let correctIndex = options.findIndex((entry) => entry.index === rawCorrectIndex);
+    if (correctIndex === -1) correctIndex = 0;
+
+    quiz.push({
+      question,
+      options: options.map((entry) => entry.text),
+      correctIndex,
+    });
+  });
+  return quiz;
+}
+
 function resetArtworkForm() {
   editingArtworkId = null;
+  editingQuizOnly = false;
+  editingArtworkSource = null;
+  artworkDrawer.classList.remove("quiz-mode");
+  renderQuizEditor([]);
   document.getElementById("artwork-name").value = "";
   document.getElementById("artwork-artist").value = "";
   document.getElementById("artwork-year").value = "";
@@ -1092,6 +1227,10 @@ function resetArtworkForm() {
 
 async function startArtworkSettingsEdit(art) {
   editingArtworkId = art.id;
+  editingQuizOnly = false;
+  editingArtworkSource = art._source || (art.key ? "uploaded" : "builtin");
+  artworkDrawer.classList.remove("quiz-mode");
+  renderQuizEditor(readQuizFromArtwork(art));
   document.getElementById("artwork-name").value = art.name || "";
   document.getElementById("artwork-artist").value = art.artist || "";
   document.getElementById("artwork-year").value = art.year || "";
@@ -1122,6 +1261,25 @@ async function startArtworkSettingsEdit(art) {
   uploadStatus.textContent = `Editing ${art.name}.`;
   uploadStatus.className = "upload-status";
   openArtworkDrawer("Edit Artwork", "Collection Entry");
+  artworkDrawer.scrollTop = 0;
+}
+
+function startQuizEdit(art) {
+  resetArtworkForm();
+  editingArtworkId = art.id;
+  editingArtworkSource = art._source || (art.key ? "uploaded" : "builtin");
+  editingQuizOnly = true;
+  document.getElementById("artwork-name").value = art.name || "";
+  document.getElementById("artwork-artist").value = art.artist || "";
+  document.getElementById("artwork-year").value = art.year || "";
+  document.getElementById("artwork-location").value = art.location || "";
+  document.getElementById("artwork-details").value = art.details || "";
+  renderQuizEditor(readQuizFromArtwork(art));
+  btnUploadArtwork.textContent = "Save Quiz";
+  uploadStatus.textContent = `Editing quiz for ${art.name}.`;
+  uploadStatus.className = "upload-status";
+  artworkDrawer.classList.add("quiz-mode");
+  openArtworkDrawer("Edit Quiz", "Quiz Builder");
   artworkDrawer.scrollTop = 0;
 }
 
@@ -1191,7 +1349,11 @@ async function loadAdminArtworks() {
       ...BUILTIN_ARTWORKS.map((a) => ({ ...a, _source: "builtin" })),
       ...uploadedArtworksCache.map((a) => ({ ...a, _source: "uploaded", id: a.key })),
     ];
-    allArtworksCache = merged.map((art) => ({ ...art, inScavengerHunt: effectiveHuntStatus(art) }));
+    allArtworksCache = merged.map((art) => ({
+      ...art,
+      inScavengerHunt: effectiveHuntStatus(art),
+      quiz: sanitizeQuiz(artworkSettingsCache[art.id]?.quiz || art.quiz || []),
+    }));
 
     const validIds = new Set(allArtworksCache.map((art) => art.id));
     selectedArtworkIds = new Set([...selectedArtworkIds].filter((id) => validIds.has(id)));
@@ -1260,6 +1422,7 @@ function renderAdminArtworks() {
             <span class="status-pill ${art.published === false ? "draft" : "published"}">${art.published === false ? "Draft" : "Published"}</span>
             ${art.scannable === false ? "" : `<span class="status-pill">AR</span>`}
             <span class="status-pill ${art.inScavengerHunt ? "hunt" : "muted"}">${art.inScavengerHunt ? "Scavenger hunt" : "Not in hunt"}</span>
+            ${art.quiz?.length ? `<span class="status-pill quiz-count">${art.quiz.length} quiz</span>` : `<span class="status-pill muted">No quiz</span>`}
           </div>
         </div>
         <div class="artwork-row-controls">
@@ -1268,11 +1431,12 @@ function renderAdminArtworks() {
             <span class="hunt-track"></span>
             <span>Hunt</span>
           </label>
-          ${isBuiltin ? "" : `
           <div class="artwork-row-actions">
+            <button class="btn-tiny artwork-quiz-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Quiz</button>
+            ${isBuiltin ? "" : `
             <button class="btn-tiny artwork-edit-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Edit</button>
-            <button class="admin-delete-btn" type="button" data-path="artworks/${escapeAttr(art.id)}" data-label="this artwork">Delete</button>
-          </div>`}
+            <button class="admin-delete-btn" type="button" data-path="artworks/${escapeAttr(art.id)}" data-label="this artwork">Delete</button>`}
+          </div>
         </div>
       </div>`;
     })
@@ -1283,6 +1447,12 @@ function renderAdminArtworks() {
     button.addEventListener("click", async () => {
       const artwork = allArtworksCache.find((item) => item.id === button.dataset.artworkId);
       if (artwork) await startArtworkSettingsEdit(artwork);
+    });
+  });
+  adminArtworksList.querySelectorAll(".artwork-quiz-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const artwork = allArtworksCache.find((item) => item.id === button.dataset.artworkId);
+      if (artwork) startQuizEdit(artwork);
     });
   });
   adminArtworksList.querySelectorAll(".artwork-select-input").forEach((checkbox) => {
@@ -1531,6 +1701,7 @@ btnNewArtwork.addEventListener("click", () => {
   openArtworkDrawer("Upload Artwork", "New Entry");
   requestAnimationFrame(() => document.getElementById("artwork-name").focus({ preventScroll: true }));
 });
+btnAddQuizQuestion?.addEventListener("click", () => addQuizQuestion());
 btnCloseArtworkDrawer.addEventListener("click", resetArtworkForm);
 artworkDrawerBackdrop.addEventListener("click", resetArtworkForm);
 document.addEventListener("keydown", (event) => {
@@ -1686,6 +1857,54 @@ function loadMindARCompiler() {
 }
 
 btnUploadArtwork.addEventListener("click", async () => {
+  if (editingArtworkId && editingQuizOnly) {
+    const quiz = collectQuizFromEditor();
+    btnUploadArtwork.disabled = true;
+    uploadStatus.textContent = "Saving quiz...";
+    uploadStatus.className = "upload-status";
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error("Not authenticated");
+      const idToken = await user.getIdToken();
+
+      const response = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quiz }),
+      });
+      if (!response.ok) throw new Error(`Quiz save failed (${response.status})`);
+
+      if (editingArtworkSource === "uploaded") {
+        try {
+          const artworkResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quiz }),
+          });
+          if (!artworkResponse.ok) console.warn("[Admin] Could not save quiz on artwork record:", artworkResponse.status);
+        } catch (artworkError) {
+          console.warn("[Admin] Could not save quiz on artwork record:", artworkError);
+        }
+      }
+
+      artworkSettingsCache[editingArtworkId] = { ...(artworkSettingsCache[editingArtworkId] || {}), quiz };
+      const cachedArtwork = allArtworksCache.find((item) => item.id === editingArtworkId);
+      if (cachedArtwork) cachedArtwork.quiz = quiz;
+
+      uploadStatus.textContent = "Quiz saved successfully!";
+      uploadStatus.className = "upload-status success";
+      loadAdminArtworks();
+      setTimeout(resetArtworkForm, 180);
+    } catch (err) {
+      console.error("Quiz save failed:", err);
+      uploadStatus.textContent = err?.message || "Could not save the quiz.";
+      uploadStatus.className = "upload-status error";
+    } finally {
+      btnUploadArtwork.disabled = false;
+    }
+    return;
+  }
+
   if (editingArtworkId) {
     const baseScale = numberOrDefault(artworkModelScaleInput.value, NaN);
     const modelPositionZ = numberOrDefault(artworkModelForwardInput.value, NaN);
@@ -1707,6 +1926,7 @@ btnUploadArtwork.addEventListener("click", async () => {
       const idToken = await user.getIdToken();
       const name = document.getElementById("artwork-name").value.trim();
       if (!name) throw new Error("Artwork title is required.");
+      const quiz = collectQuizFromEditor();
 
       const payload = {
         name,
@@ -1723,6 +1943,7 @@ btnUploadArtwork.addEventListener("click", async () => {
         scannable: artworkScannableInput.checked,
         published: artworkPublishedInput.checked,
         inScavengerHunt: artworkHuntInput.checked,
+        quiz,
       };
 
       const response = await fetch(`${FIREBASE_URL}/artworks/${editingArtworkId}.json?auth=${idToken}`, {
@@ -1736,13 +1957,18 @@ btnUploadArtwork.addEventListener("click", async () => {
         const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked }),
+          body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked, quiz }),
         });
         if (!settingsResponse.ok) console.warn("[Admin] Could not save artworkSettings entry:", settingsResponse.status);
       } catch (settingsError) {
         console.warn("[Admin] Could not save artworkSettings entry:", settingsError);
       }
 
+      artworkSettingsCache[editingArtworkId] = {
+        ...(artworkSettingsCache[editingArtworkId] || {}),
+        inScavengerHunt: artworkHuntInput.checked,
+        quiz,
+      };
       uploadStatus.textContent = "Artwork saved successfully!";
       uploadStatus.className = "upload-status success";
       loadCounts();
@@ -1779,6 +2005,7 @@ btnUploadArtwork.addEventListener("click", async () => {
   try {
     const artworkId = `art-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const basePath = `artworks/${artworkId}`;
+    const quiz = collectQuizFromEditor();
     let imageUrl = null;
     if (displayFile) imageUrl = await uploadSupabaseAsset(displayFile, `${basePath}/display.${fileExtension(displayFile, "jpg")}`);
     else if (processedImageBase64) imageUrl = processedImageBase64;
@@ -1813,6 +2040,7 @@ const artwork = {
       scannable: artworkScannableInput.checked,
       published: artworkPublishedInput.checked,
       inScavengerHunt: artworkHuntInput.checked,
+      quiz,
       createdAt: Date.now(),
     };
 
@@ -1832,13 +2060,14 @@ const artwork = {
       const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked }),
+        body: JSON.stringify({ inScavengerHunt: artworkHuntInput.checked, quiz }),
       });
       if (!settingsResponse.ok) console.warn("[Admin] Could not save artworkSettings entry:", settingsResponse.status);
     } catch (settingsError) {
       console.warn("[Admin] Could not save artworkSettings entry:", settingsError);
     }
 
+    artworkSettingsCache[artworkId] = { inScavengerHunt: artworkHuntInput.checked, quiz };
     uploadStatus.textContent = "Artwork uploaded successfully!";
     uploadStatus.className = "upload-status success";
 

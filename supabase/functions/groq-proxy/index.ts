@@ -156,7 +156,7 @@ export default {
 
       const sanitizedMessages = messages.slice(-20).map((m: any) => ({
         role: m.role === "assistant" ? "assistant" : "user",
-        content: sanitizeInput(String(m.content || ""), 300),
+        content: sanitizeInput(String(m.content || ""), 4000),
       }));
 
       const isJsonMode = jsonMode || (systemPrompt && systemPrompt.includes("JSON"));
@@ -164,7 +164,7 @@ export default {
       const systemContent = systemPrompt || "You are a helpful assistant.";
 
       const temperature = isJsonMode ? 0.1 : 0.4;
-      const maxTokens = isJsonMode ? 800 : 300;
+      const maxTokens = isJsonMode ? 1800 : 300;
 
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",

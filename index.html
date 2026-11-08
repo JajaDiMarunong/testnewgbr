@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=31" />
+<link rel="stylesheet" href="style.css?v=32" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -69,7 +69,7 @@
         <button id="btn-tour-skip" class="tour-skip">Skip</button>
       </div>
       <div class="tour-illustration" id="tour-illustration">
-        <img src="./assets/icons/artwork.png" alt="" class="tour-illo-img" />
+        <img src="./assets/icons/artwork.webp" alt="" class="tour-illo-img" />
       </div>
       <h3 id="tour-title">Welcome</h3>
       <p id="tour-text" class="tour-text">...</p>
@@ -84,7 +84,7 @@
   <section id="screen-home" class="screen hidden">
     <div class="corner-fabs corner-fabs-left">
       <button id="btn-open-badges" class="fab-btn" aria-label="Badges" title="Badges">
-        <img src="./assets/icons/badge.png" alt="Badges" class="fab-icon-img" />
+        <img src="./assets/icons/badge.webp" alt="Badges" class="fab-icon-img" />
       </button>
       <button id="btn-open-library" class="fab-btn" aria-label="Artwork Library" title="Artwork Library">📖</button>
     </div>
@@ -147,8 +147,23 @@
         <p class="eyebrow" id="detail-eyebrow">Unlocked Artwork</p>
         <h2 id="detail-title">—</h2>
         <p id="detail-text" class="detail-text">—</p>
+        <button id="btn-take-quiz" class="btn-primary hidden">Take the Quiz</button>
+        <p id="quiz-done-note" class="quiz-done-note hidden">✓ Quiz completed</p>
         <button id="btn-immersive" class="btn-primary hidden">Enter Immersive View</button>
       </div>
+    </div>
+  </section>
+
+  <section id="screen-quiz" class="screen hidden">
+    <div class="detail-topbar">
+      <button id="btn-quiz-back" class="btn-icon">← Back</button>
+      <span id="quiz-progress" class="quiz-progress">Question 1 / 1</span>
+    </div>
+    <div class="quiz-body">
+      <h2 id="quiz-question">—</h2>
+      <div id="quiz-options" class="quiz-options"></div>
+      <p id="quiz-feedback" class="quiz-feedback hidden">—</p>
+      <button id="btn-quiz-next" class="btn-primary hidden">Next Question</button>
     </div>
   </section>
 
@@ -200,7 +215,7 @@
     </div>
     <div class="detail-scroll">
       <div class="detail-body">
-        <p class="eyebrow" style="display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/badge.png" alt="" class="eyebrow-icon-img" /> Your Progress</p>
+        <p class="eyebrow" style="display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/badge.webp" alt="" class="eyebrow-icon-img" /> Your Progress</p>
         <h2>Badges</h2>
         <p class="detail-text">Complete actions around the gallery to earn badges. Collect them all to unlock the guestbook on the Leaderboard tab.</p>
         <div id="badges-grid" class="badges-grid"></div>
@@ -215,7 +230,7 @@
     <div class="leaderboard-split">
       <div class="leaderboard-half">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <p class="eyebrow" style="margin:0;display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/leaderboard.png" alt="" class="eyebrow-icon-img" /> Fastest Completions</p>
+          <p class="eyebrow" style="margin:0;display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/leaderboard.webp" alt="" class="eyebrow-icon-img" /> Fastest Completions</p>
           <a href="guestbook.html" class="btn-tiny" style="text-decoration:none;display:inline-flex;align-items:center;">📋 Full View →</a>
         </div>
         <div id="leaderboard-list" class="leaderboard-list">
@@ -249,13 +264,13 @@
 
   <nav id="bottom-nav" class="bottom-nav hidden">
     <button class="nav-btn active" data-tab="home">
-      <span class="nav-icon"><img src="./assets/icons/artwork.png" alt="Artworks" class="nav-icon-img" /></span><span class="nav-label">Artworks</span>
+      <span class="nav-icon"><img src="./assets/icons/artwork.webp" alt="Artworks" class="nav-icon-img" /></span><span class="nav-label">Artworks</span>
     </button>
     <button class="nav-btn" data-tab="scanner">
-      <span class="nav-icon"><img src="./assets/icons/arcamera.png" alt="AR Camera" class="nav-icon-img" /></span><span class="nav-label">AR Camera</span>
+      <span class="nav-icon"><img src="./assets/icons/arcamera.webp" alt="AR Camera" class="nav-icon-img" /></span><span class="nav-label">AR Camera</span>
     </button>
     <button class="nav-btn" data-tab="leaderboard">
-      <span class="nav-icon"><img src="./assets/icons/leaderboard.png" alt="Leaderboard" class="nav-icon-img" /></span><span class="nav-label">Leaderboard</span>
+      <span class="nav-icon"><img src="./assets/icons/leaderboard.webp" alt="Leaderboard" class="nav-icon-img" /></span><span class="nav-label">Leaderboard</span>
     </button>
   </nav>
 
@@ -347,7 +362,7 @@
   </div>
 
   <button id="chat-head-btn" class="chat-head-btn hidden" type="button" aria-label="Open AI museum guide" title="Open AI museum guide">
-    <img src="./assets/icons/aichat.png" alt="Kuya Davon AI Guide" class="chat-head-img" />
+    <img src="./assets/icons/aichat.webp" alt="Kuya Davon AI Guide" class="chat-head-img" />
   </button>
 
   <div id="chat-panel" class="chat-panel hidden">
@@ -383,7 +398,7 @@
       <div class="badge-unlock-glow" aria-hidden="true"></div>
       <div class="badge-unlock-emblem-wrap">
         <div class="badge-unlock-emblem">
-          <img id="badge-modal-icon" src="./assets/icons/badge.png" alt="Badge" class="badge-modal-icon-img" />
+          <img id="badge-modal-icon" src="./assets/icons/badge.webp" alt="Badge" class="badge-modal-icon-img" />
         </div>
       </div>
       <p class="modal-eyebrow badge-unlock-eyebrow">✦ Badge Unlocked ✦</p>
@@ -399,7 +414,7 @@
   <div id="unlock-confetti" class="unlock-confetti" aria-hidden="true"></div>
 
   <div id="badge-toast" class="badge-toast hidden">
-    <span id="badge-toast-icon"><img src="./assets/icons/badge.png" alt="Badge" class="badge-toast-img" /></span>
+    <span id="badge-toast-icon"><img src="./assets/icons/badge.webp" alt="Badge" class="badge-toast-img" /></span>
     <span id="badge-toast-text">Badge earned!</span>
   </div>
 
@@ -435,6 +450,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=38" defer></script>
+  <script src="app.js?v=39" defer></script>
 </body>
 </html>

@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=9" />
+<link rel="stylesheet" href="admin.css?v=10" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js"></script>
 <script>
@@ -59,13 +59,13 @@
   <div id="ai-modal" class="modal-overlay hidden">
     <div class="modal-card ai-modal-card">
       <p class="modal-eyebrow">AI Assistant</p>
-      <h2>Auto-Fill Artwork Info</h2>
-      <p class="modal-desc">Paste any description, title, or notes about the artwork below. The AI will extract the title, artist, year, location, and write a description for you.</p>
+      <h2>Auto-Fill Artwork Info &amp; Quiz</h2>
+      <p class="modal-desc">Paste any description, title, or notes about the artwork below. The AI will extract the title, artist, year, location, write a description, and generate quiz questions for you.</p>
       <textarea id="ai-paste-input" class="note-textarea" rows="6" placeholder="Paste artwork info here… e.g. The Starry Night is an oil-on-canvas painting by Dutch Post-Impressionist painter Vincent van Gogh. Painted in June 1889, it depicts the view from the east-facing window of his asylum room at Saint-Rémy-de-Provence, just before sunrise, with the addition of an imaginary village. It has been in the permanent collection of the Museum of Modern Art in New York City since 1941."></textarea>
       <p id="ai-modal-status" class="ai-status"></p>
       <div class="modal-actions">
         <button id="btn-ai-cancel" class="btn-secondary">Cancel</button>
-        <button id="btn-ai-submit" class="btn-primary">Auto-Fill Fields</button>
+        <button id="btn-ai-submit" class="btn-primary">Auto-Fill Fields &amp; Quiz</button>
       </div>
     </div>
   </div>
@@ -327,9 +327,9 @@
               </header>
 
               <div class="drawer-body">
-              <button id="btn-open-ai-modal" class="btn-secondary btn-small ai-fill-btn" type="button">AI Assistant — Auto-Fill Info</button>
+              <button id="btn-open-ai-modal" class="btn-secondary btn-small ai-fill-btn" type="button">AI Assistant — Auto-Fill Info &amp; Quiz</button>
 
-              <div class="form-section">
+              <div class="form-section quiz-hidden">
                 <h4 class="form-section-title">Artwork Details</h4>
 
                 <div class="form-group">
@@ -359,7 +359,7 @@
                 </div>
               </div>
 
-              <div class="form-section">
+              <div class="form-section quiz-hidden">
                 <h4 class="form-section-title">Media</h4>
 
                 <div class="form-group">
@@ -421,7 +421,7 @@
                 </div>
               </div>
 
-              <div class="form-section">
+              <div class="form-section quiz-hidden">
                 <h4 class="form-section-title">AR &amp; Immersive Placement</h4>
 
                 <div class="form-row">
@@ -457,7 +457,7 @@
                 </div>
               </div>
 
-              <div class="form-section">
+              <div class="form-section quiz-hidden">
                 <h4 class="form-section-title">Visibility</h4>
                 <div class="artwork-options">
                   <label class="checkbox-label"><input id="artwork-main" type="checkbox" checked /> Show in Main Collection</label>
@@ -466,6 +466,15 @@
                   <label class="checkbox-label checkbox-highlight"><input id="artwork-hunt" type="checkbox" checked /> Include in Scavenger Hunt</label>
                 </div>
                 <p class="field-hint">Artworks left out of the scavenger hunt stay available in the Library and AR, but are excluded from hunt progress and completion.</p>
+              </div>
+
+              <div class="form-section" id="quiz-section">
+                <div class="quiz-section-head">
+                  <h4 class="form-section-title">Quiz Questions</h4>
+                  <button id="btn-add-quiz-question" class="btn-secondary btn-small" type="button">+ Add Question</button>
+                </div>
+                <p class="field-hint">Add multiple-choice questions for this artwork. The AI Assistant can also generate a quiz from the info you paste.</p>
+                <div id="quiz-editor-list" class="quiz-editor-list"></div>
               </div>
               </div>
 
@@ -679,6 +688,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=9" defer></script>
+  <script src="admin.js?v=10" defer></script>
 </body>
 </html>
