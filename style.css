@@ -266,7 +266,13 @@ button.corner-fabs-right {
   background: rgba(0,0,0,0.55); color: rgba(244,241,234,0.8);
   border: 1px solid rgba(244,241,234,0.2);
 }
-.status-badge.unlocked { background: var(--success); color: #0e1a12; border-color: transparent; }
+.status-badge.unlocked {
+  background: var(--success); color: #0e1a12; border-color: transparent;
+  /* Compact circular check mark instead of a wide "✓ Unlocked" pill */
+  width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  justify-content: center; font-size: 12px; line-height: 1;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+}
 .status-badge.comingsoon { background: rgba(244,241,234,0.1); color: rgba(244,241,234,0.5); }
 
 .quiz-status-pill {
@@ -296,6 +302,11 @@ button.corner-fabs-right {
 .btn-primary:disabled { opacity: 0.5; }
 .btn-secondary { background: rgba(244, 241, 234, 0.1); color: var(--text); flex: 1; }
 .btn-icon { background: rgba(0,0,0,0.5); color: var(--text); padding: 9px 16px; font-size: 13px; font-weight: 500; min-height: 42px; }
+/* Components that fade (modal-overlay, chat-panel, filter-toast, badge-toast,
+   loading-screen, tour-overlay) define their own two-class .hidden rule so they
+   keep their transitions. Plain buttons have no display rule of their own, so
+   without this they never actually disappear when .hidden is added. */
+.btn-primary.hidden, .btn-secondary.hidden, .btn-small.hidden { display: none; }
 
 .text-input {
   width: 100%; font-family: inherit; font-size: 14px;
@@ -343,6 +354,7 @@ button.corner-fabs-right {
 .detail-text { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0 0 22px 0; white-space: pre-line; }
 
 .quiz-done-note { text-align: center; color: var(--success); font-weight: 700; font-size: 13px; margin-top: 12px; }
+.quiz-done-note.hidden { display: none; }
 
 /* ---------------- quiz screen ---------------- */
 .quiz-progress { font-size: 12px; color: var(--text-dim); }
@@ -363,6 +375,7 @@ button.corner-fabs-right {
 .quiz-feedback { font-size: 13.5px; font-weight: 600; margin-bottom: 16px; }
 .quiz-feedback.correct { color: var(--success); }
 .quiz-feedback.incorrect { color: var(--danger); }
+.quiz-feedback.hidden { display: none; }
 
 /* ---------------- library screen (low-end-device friendly) ---------------- */
 .library-list { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
