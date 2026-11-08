@@ -1,4 +1,6 @@
-/* Offline data cache, Firebase write queue, and first-launch asset downloader. */
+/* Offline data cache, Firebase write queue, first-launch asset downloader, and the
+   page-shell touches both apps share: service worker registration and the guard
+   against the browser's pull-to-refresh gesture. */
 (function () {
   "use strict";
   const DB_NAME = "gbr-museum-offline";
@@ -242,6 +244,36 @@
     }
     return { completed, total: assets.length, failed };
   }
+
+  // Pulling the page down while it is already at the top is the browser's own
+  // reload gesture, and on this app it throws away the AR session, the scanner
+  // position, and anything typed but not saved yet. Chrome and Firefox can be told
+  // to leave it alone in CSS (style.css and admin.css set overscroll-behavior), but
+  // Safari ignores those rules, so cancel that one gesture here. Only a drag with
+  // nothing left to scroll is cancelled, so lists, drawers, and modals keep
+  // scrolling exactly as before.
+  (function blockPullToRefresh() {
+    let startY = null;
+    const canScrollUp = (node) => {
+      for (let el = node; el && el !== document.body; el = el.parentElement) {
+        if (el.scrollTop > 0) return true;
+      }
+      return false;
+    };
+    document.addEventListener("touchstart", (event) => {
+      startY = event.touches.length === 1 ? event.touches[0].clientY : null;
+    }, { passive: true });
+    document.addEventListener("touchend", () => { startY = null; }, { passive: true });
+    document.addEventListener("touchcancel", () => { startY = null; }, { passive: true });
+    document.addEventListener("touchmove", (event) => {
+      if (startY === null || event.touches.length !== 1) return;
+      if (event.touches[0].clientY - startY <= 0) return;
+      const page = document.scrollingElement || document.documentElement;
+      if (page && page.scrollTop > 0) return;
+      if (canScrollUp(event.target)) return;
+      if (event.cancelable) event.preventDefault();
+    }, { passive: false });
+  })();
 
   window.MuseumOffline = { preloadAssets, flushQueue, cachedJson };
   window.addEventListener("online", () => flushQueue().catch(console.warn));

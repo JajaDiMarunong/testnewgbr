@@ -25,6 +25,16 @@ html, body {
   background: linear-gradient(180deg, var(--wall) 0%, var(--wall-deep) 100%);
 }
 
+/* Pull-to-refresh is the browser's gesture, not an app feature: a downward drag on
+   a screen that is already at the top reloads the page and drops the visitor out
+   of AR or out of a half-finished quiz. `none` keeps the page from taking part and
+   `contain` stops a drag inside a list from chaining up to it. Safari ignores both,
+   so offline-store.js cancels that one gesture there. */
+.gallery-scroll, .detail-scroll, .quiz-body, .library-detail-scroll,
+.chat-messages, .leaderboard-half, .leaderboard-list, .unlock-card .modal-desc {
+  overscroll-behavior: contain;
+}
+
 h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: 0.01em; }
 
 /* ---------------- AR base layer ---------------- */
