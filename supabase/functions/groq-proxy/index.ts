@@ -171,6 +171,38 @@ interface GroqAttempt {
   finishReason: string | null;
   status: number | null;
   error: string | null;
+  retryAfterMs: number | null;
+}
+
+// Groq reports its tokens-per-minute budget through Retry-After (the header can
+// be fractional, e.g. "7.5") and repeats the same delay in the message body:
+// "Please try again in 4.1325s". Either source is good enough to wait on.
+function parseRetryAfterMs(res: Response, bodyText: string): number | null {
+  const header = res.headers.get("retry-after");
+  const headerSeconds = Number(header);
+  if (header && Number.isFinite(headerSeconds) && headerSeconds > 0) {
+    return Math.round(headerSeconds * 1000);
+  }
+  const match = /try again in ([0-9.]+)\s*s/i.exec(bodyText);
+  if (match) {
+    const seconds = Number(match[1]);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.round(seconds * 1000);
+  }
+  return null;
+}
+
+// A chat bubble cannot sit on a spinner for half a minute, so the automatic
+// retry waits at most this long. The Retry-After we hand back still carries the
+// real delay, so the widget can tell the visitor when to come back.
+const CHAT_RETRY_WAIT_MS = 4000;
+
+function clampRetryWait(ms: number | null): number {
+  if (!ms || !Number.isFinite(ms)) return 1500;
+  return Math.min(Math.max(ms, 600), CHAT_RETRY_WAIT_MS);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function postGroq(payload: Record<string, unknown>): Promise<Response> {
@@ -218,7 +250,14 @@ async function callGroq(
   if (!res.ok) {
     const errText = await res.text();
     console.error("[groq-proxy] Groq API error:", res.status, model, errText.slice(0, 300));
-    return { model, content: "", finishReason: null, status: res.status, error: errText.slice(0, 300) };
+    return {
+      model,
+      content: "",
+      finishReason: null,
+      status: res.status,
+      error: errText.slice(0, 300),
+      retryAfterMs: parseRetryAfterMs(res, errText),
+    };
   }
 
   const data = await res.json();
@@ -234,7 +273,7 @@ async function callGroq(
       JSON.stringify(data.usage),
     );
   }
-  return { model, content, finishReason: choice?.finish_reason ?? null, status: 200, error: null };
+  return { model, content, finishReason: choice?.finish_reason ?? null, status: 200, error: null, retryAfterMs: null };
 }
 
 export default {
@@ -298,6 +337,22 @@ export default {
         }
       }
 
+      if (!isJsonMode) {
+        // The widget replays the conversation with every question. Once the
+        // thread grows past a few thousand characters the oldest turns are
+        // dropped so a long visit cannot push the request over the per-minute
+        // token budget on its own.
+        const chatTotalCap = 6000;
+        let chatChars = sanitizedMessages.reduce(
+          (sum: number, m: { content: string }) => sum + m.content.length,
+          0,
+        );
+        while (chatChars > chatTotalCap && sanitizedMessages.length > 1) {
+          chatChars -= sanitizedMessages[0].content.length;
+          sanitizedMessages = sanitizedMessages.slice(1);
+        }
+      }
+
       const requested = Number(requestedMaxTokens);
       let maxTokens = Number.isFinite(requested) && requested > 0
         ? Math.min(Math.max(Math.trunc(requested), 256), 8000)
@@ -334,6 +389,25 @@ export default {
           if (attempt.finishReason === "length") maxTokens = Math.min(maxTokens * 2, 8000);
         }
 
+        // A rate limit is not an empty answer, and the admin page needs the
+        // Retry-After value to decide whether waiting is worthwhile.
+        if (last?.status === 429) {
+          return new Response(
+            JSON.stringify({
+              error: "The AI is rate limited right now. Please wait a few seconds and try again.",
+              model: last.model,
+              upstreamStatus: 429,
+            }),
+            {
+              status: 429,
+              headers: {
+                ...corsHeaders(),
+                "Retry-After": String(Math.max(1, Math.ceil((last.retryAfterMs ?? 9500) / 1000))),
+              },
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({
             error: last?.finishReason === "length"
@@ -348,7 +422,37 @@ export default {
       }
 
       const resolvedModel = model || (await resolveGroqModel(false));
-      const attempt = await callGroq(resolvedModel, systemContent, sanitizedMessages, false, maxTokens);
+      let attempt = await callGroq(resolvedModel, systemContent, sanitizedMessages, false, maxTokens);
+
+      // The guide prompt is a few thousand tokens on its own, so a visitor who
+      // asks two questions inside the same minute used to blow Groq's free-tier
+      // budget and get an instant "AI service unavailable". Wait out the delay
+      // Groq asks for once, instead of reporting an outage.
+      if (attempt.status === 429) {
+        const waitMs = clampRetryWait(attempt.retryAfterMs);
+        console.warn("[groq-proxy] Chat rate limited; retrying in", waitMs, "ms");
+        await sleep(waitMs);
+        attempt = await callGroq(resolvedModel, systemContent, sanitizedMessages, false, maxTokens);
+      }
+
+      if (!attempt.content && attempt.status === 429) {
+        console.error("[groq-proxy] Chat still rate limited:", attempt.error);
+        return new Response(
+          JSON.stringify({
+            error: "The guide is answering a lot of visitors right now. Please ask again in a few seconds.",
+          }),
+          {
+            status: 429,
+            headers: {
+              ...corsHeaders(),
+              "Retry-After": String(
+                Math.max(1, Math.ceil((attempt.retryAfterMs ?? CHAT_RETRY_WAIT_MS) / 1000)),
+              ),
+            },
+          },
+        );
+      }
+
       if (!attempt.content && attempt.status !== 200) {
         // Keep the chat bubble working even when Groq is unreachable.
         console.error("[groq-proxy] Chat request failed:", attempt.status, attempt.error);
