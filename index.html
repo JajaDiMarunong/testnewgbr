@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=35" />
+<link rel="stylesheet" href="style.css?v=36" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -204,6 +204,15 @@
             <p>See the how-to-use walkthrough again</p>
           </div>
           <span class="settings-arrow">›</span>
+        </div>
+
+        <div class="settings-row settings-row-static">
+          <div>
+            <h4>App Version</h4>
+            <p id="settings-version-text">—</p>
+            <p id="settings-update-status" class="settings-update-status"></p>
+          </div>
+          <button id="btn-check-updates" class="btn-secondary btn-small" type="button">Check</button>
         </div>
       </div>
     </div>
@@ -450,6 +459,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=45" defer></script>
+  <script src="app.js?v=46" defer></script>
 </body>
 </html>

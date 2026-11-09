@@ -57,6 +57,23 @@ const btnAdminLoginSubmit = document.getElementById("btn-admin-login-submit");
 const btnLogout = document.getElementById("btn-logout");
 const btnInstallAdmin = document.getElementById("btn-install-admin");
 const btnInstallAdminLogin = document.getElementById("btn-install-admin-login");
+const btnForgotPassword = document.getElementById("btn-forgot-password");
+const adminLoginStatus = document.getElementById("admin-login-status");
+
+// Account & About tab
+const accountTabButton = document.querySelector('.tab-btn[data-tab="account"]');
+const accountEmail = document.getElementById("account-email");
+const accountCurrentPassword = document.getElementById("account-current-password");
+const accountNewPassword = document.getElementById("account-new-password");
+const accountConfirmPassword = document.getElementById("account-confirm-password");
+const accountPasswordStatus = document.getElementById("account-password-status");
+const btnChangePassword = document.getElementById("btn-change-password");
+const btnSendResetEmail = document.getElementById("btn-send-reset-email");
+const adminVersionText = document.getElementById("admin-version-text");
+const adminUpdateStatus = document.getElementById("admin-update-status");
+const btnCheckAdminUpdates = document.getElementById("btn-check-admin-updates");
+const btnLoadAdminUpdate = document.getElementById("btn-load-admin-update");
+const loginVersionText = document.getElementById("login-version-text");
 
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
@@ -160,9 +177,119 @@ let cachedLeaderboard = [];
 let cachedNotes = [];
 
 // -------------------------------------------------------------------
+// Release info + update check
+// APP_VERSION is shared with the museum app through asset-manifest.js. The
+// build number is the ?v= suffix admin.html asked this browser to load, so the
+// label always reflects the files that are actually running.
+// -------------------------------------------------------------------
+const ADMIN_RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
+
+function readAdminAssetBuild(scriptName) {
+  const scripts = Array.from(document.scripts || []);
+  const script = scripts.find((tag) => (tag.src || "").indexOf(scriptName) !== -1);
+  const match = script && /[?&]v=(\d+)/.exec(script.src);
+  return match ? Number(match[1]) : 0;
+}
+
+const ADMIN_BUILD = readAdminAssetBuild("admin.js");
+
+function adminVersionLabel() {
+  return ADMIN_BUILD
+    ? `Console v${ADMIN_RELEASE_VERSION} · build ${ADMIN_BUILD}`
+    : `Console v${ADMIN_RELEASE_VERSION}`;
+}
+
+function renderAdminVersion() {
+  if (adminVersionText) adminVersionText.textContent = adminVersionLabel();
+  if (loginVersionText) {
+    loginVersionText.textContent = ADMIN_BUILD
+      ? `v${ADMIN_RELEASE_VERSION} · build ${ADMIN_BUILD}`
+      : `v${ADMIN_RELEASE_VERSION}`;
+  }
+}
+
+function setAdminUpdateStatus(message, state) {
+  if (!adminUpdateStatus) return;
+  adminUpdateStatus.textContent = message;
+  adminUpdateStatus.className = `account-status${state ? ` ${state}` : ""}`;
+}
+
+let adminUpdateCheckDone = false;
+
+async function checkAdminUpdates() {
+  if (!btnCheckAdminUpdates) return;
+  btnCheckAdminUpdates.disabled = true;
+  setAdminUpdateStatus("Checking the deployed build…");
+  try {
+    // The service worker answers from cache, so ask for a cache-busted copy of
+    // the deployed page instead of trusting the local one.
+    const response = await fetch(`./admin.html?_=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const html = await response.text();
+    const match = /admin\.js\?v=(\d+)/.exec(html);
+    const deployedBuild = match ? Number(match[1]) : 0;
+    if (!deployedBuild) {
+      setAdminUpdateStatus("Could not read the deployed build.", "is-error");
+    } else if (deployedBuild > ADMIN_BUILD) {
+      setAdminUpdateStatus(`Build ${deployedBuild} is deployed — reload to use it.`);
+      if (btnLoadAdminUpdate) btnLoadAdminUpdate.classList.remove("hidden");
+    } else {
+      setAdminUpdateStatus("This console is on the latest build.", "is-success");
+      if (btnLoadAdminUpdate) btnLoadAdminUpdate.classList.add("hidden");
+    }
+  } catch (error) {
+    console.warn("[Admin] Update check failed:", error);
+    setAdminUpdateStatus("Could not check — the browser may be offline.", "is-error");
+  } finally {
+    btnCheckAdminUpdates.disabled = false;
+    adminUpdateCheckDone = true;
+  }
+}
+
+async function loadAdminUpdate() {
+  if (!btnLoadAdminUpdate) return;
+  btnLoadAdminUpdate.disabled = true;
+  setAdminUpdateStatus("Loading the new build…");
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+    if (window.caches && typeof caches.keys === "function") {
+      const names = await caches.keys();
+      await Promise.all(
+        names.filter((name) => name.indexOf("gbr-museum-") === 0).map((name) => caches.delete(name))
+      );
+    }
+  } catch (error) {
+    console.warn("[Admin] Could not clear the offline cache:", error);
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("updated", String(Date.now()));
+  window.location.replace(url.toString());
+}
+
+if (btnCheckAdminUpdates) btnCheckAdminUpdates.addEventListener("click", checkAdminUpdates);
+if (btnLoadAdminUpdate) btnLoadAdminUpdate.addEventListener("click", loadAdminUpdate);
+if (accountTabButton) {
+  accountTabButton.addEventListener("click", () => {
+    renderAdminVersion();
+    // One automatic check per session; the Check button always re-checks.
+    if (!adminUpdateCheckDone) checkAdminUpdates();
+  });
+}
+
+renderAdminVersion();
+
+if (window.location.search.indexOf("updated=") !== -1) {
+  window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+}
+
+// -------------------------------------------------------------------
 // Login - Firebase Email/Password Auth
 // Create this user in Firebase Console → Authentication → Users → Add user.
-// Credentials are never stored in source; the password is entered at runtime.
+// No password is stored in the source: it is typed at runtime and can be
+// changed from the Account tab (or by email reset) without touching the code.
 // -------------------------------------------------------------------
 const ADMIN_EMAIL = "admin@gbrmuseum.test";
 
@@ -177,7 +304,12 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
   console.log("[Admin] Signing in with email:", ADMIN_EMAIL);
   try {
     await firebase.auth().signInWithEmailAndPassword(ADMIN_EMAIL, password);
-    console.log("[Admin] Signed in as:", firebase.auth().currentUser?.uid);
+    const user = firebase.auth().currentUser;
+    console.log("[Admin] Signed in as:", user?.uid);
+    if (accountEmail) accountEmail.textContent = (user && user.email) || ADMIN_EMAIL;
+    if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
+    hideAccountStatus();
+    clearPasswordForm();
     screenLogin.classList.add("hidden");
     adminDashboard.classList.remove("hidden");
     loadAllData();
@@ -204,7 +336,133 @@ btnLogout.addEventListener("click", () => {
   screenLogin.classList.remove("hidden");
   adminPasswordInput.value = "";
   adminLoginError.classList.add("hidden");
+  clearPasswordForm();
+  hideAccountStatus();
+  if (accountEmail) accountEmail.textContent = "—";
 });
+
+// -------------------------------------------------------------------
+// Account — password management
+// The sign-in account lives in Firebase Authentication, so no password is
+// stored in the source. Staff can rotate it here; the change applies to every
+// device that signs in with this administrator account.
+// -------------------------------------------------------------------
+function setAccountStatus(message, state) {
+  if (!accountPasswordStatus) return;
+  accountPasswordStatus.textContent = message;
+  accountPasswordStatus.className = `account-status${state ? ` ${state}` : ""}`;
+  accountPasswordStatus.classList.remove("hidden");
+}
+
+function hideAccountStatus() {
+  if (!accountPasswordStatus) return;
+  accountPasswordStatus.textContent = "";
+  accountPasswordStatus.className = "account-status hidden";
+}
+
+function setLoginStatus(message, state) {
+  if (!adminLoginStatus) return;
+  adminLoginStatus.textContent = message;
+  adminLoginStatus.className = `login-status${state ? ` ${state}` : ""}`;
+}
+
+function clearPasswordForm() {
+  [accountCurrentPassword, accountNewPassword, accountConfirmPassword].forEach((field) => {
+    if (field) field.value = "";
+  });
+}
+
+function describeAuthError(err) {
+  const code = err && err.code;
+  if (code === "auth/wrong-password" || code === "auth/invalid-credential" || code === "auth/invalid-login-credentials") {
+    return "That current password is not correct.";
+  }
+  if (code === "auth/weak-password") return "Firebase rejected that password as too weak. Use at least 8 characters.";
+  if (code === "auth/too-many-requests") return "Too many attempts. Wait a minute, then try again.";
+  if (code === "auth/requires-recent-login") return "Sign out, sign back in, then change the password.";
+  if (code === "auth/network-request-failed") return "No connection to Firebase. Check the internet and try again.";
+  return (err && err.message) || "Something went wrong. Please try again.";
+}
+
+if (btnChangePassword) {
+  btnChangePassword.addEventListener("click", async () => {
+    const user = firebase.auth().currentUser;
+    if (!user) {
+      setAccountStatus("Sign out and sign back in before changing the password.", "is-error");
+      return;
+    }
+    const current = accountCurrentPassword ? accountCurrentPassword.value : "";
+    const next = accountNewPassword ? accountNewPassword.value : "";
+    const confirm = accountConfirmPassword ? accountConfirmPassword.value : "";
+    if (!current) {
+      setAccountStatus("Enter the current password first.", "is-error");
+      return;
+    }
+    if (next.length < 8) {
+      setAccountStatus("The new password needs at least 8 characters.", "is-error");
+      return;
+    }
+    if (next !== confirm) {
+      setAccountStatus("The two new passwords do not match.", "is-error");
+      return;
+    }
+    if (next === current) {
+      setAccountStatus("Pick a password that is different from the current one.", "is-error");
+      return;
+    }
+
+    btnChangePassword.disabled = true;
+    setAccountStatus("Updating the password…");
+    try {
+      // Firebase only accepts a password change right after a fresh sign-in,
+      // so prove the current password first and then rotate it.
+      const credential = firebase.auth.EmailAuthProvider.credential(user.email || ADMIN_EMAIL, current);
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(next);
+      clearPasswordForm();
+      setAccountStatus("Password updated. Use the new password the next time you sign in.", "is-success");
+    } catch (err) {
+      console.error("[Admin] Password change failed:", err);
+      setAccountStatus(describeAuthError(err), "is-error");
+    } finally {
+      btnChangePassword.disabled = false;
+    }
+  });
+}
+
+if (btnSendResetEmail) {
+  btnSendResetEmail.addEventListener("click", async () => {
+    const user = firebase.auth().currentUser;
+    const email = (user && user.email) || ADMIN_EMAIL;
+    btnSendResetEmail.disabled = true;
+    setAccountStatus(`Sending a reset link to ${email}…`);
+    try {
+      await firebase.auth().sendPasswordResetEmail(email);
+      setAccountStatus(`Reset link sent to ${email}. Open it to choose a new password.`, "is-success");
+    } catch (err) {
+      console.error("[Admin] Reset email failed:", err);
+      setAccountStatus(describeAuthError(err), "is-error");
+    } finally {
+      btnSendResetEmail.disabled = false;
+    }
+  });
+}
+
+if (btnForgotPassword) {
+  btnForgotPassword.addEventListener("click", async () => {
+    btnForgotPassword.disabled = true;
+    setLoginStatus(`Sending a reset link to ${ADMIN_EMAIL}…`);
+    try {
+      await firebase.auth().sendPasswordResetEmail(ADMIN_EMAIL);
+      setLoginStatus(`Reset link sent to ${ADMIN_EMAIL}. Open it to choose a new password, then sign in here.`, "is-success");
+    } catch (err) {
+      console.error("[Admin] Reset email failed:", err);
+      setLoginStatus(describeAuthError(err), "is-error");
+    } finally {
+      btnForgotPassword.disabled = false;
+    }
+  });
+}
 
 // -------------------------------------------------------------------
 // Install as desktop app

@@ -1,5 +1,16 @@
 /* Update this list whenever a deployable asset is added. It is shared by the
    first-launch downloader and the service worker. */
+
+/* Release checklist — keep these four steps together so a deploy can be
+   recognised from inside the app (Settings) and the admin console (Account):
+     1. Bump APP_VERSION below.
+     2. Bump the ?v= suffix on app.js in index.html and admin.js in admin.html.
+     3. Bump CACHE_NAME / DATA_CACHE in sw.js.
+     4. Bump the ?v= suffix of any CSS file you edited.
+   The build number shown on screen is read from the ?v= suffix the browser
+   actually loaded, so it can never drift from the deployed files. */
+self.APP_VERSION = "1.3.0";
+
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
   "./asset-manifest.js", "./sw.js", "./guestbook.html", "./guestbook.css",

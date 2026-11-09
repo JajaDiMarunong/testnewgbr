@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=11" />
+<link rel="stylesheet" href="admin.css?v=12" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -44,8 +44,11 @@
         <input id="admin-password-input" class="text-input" type="password" placeholder="Enter admin password" autocomplete="current-password" />
         <p id="admin-login-error" class="admin-error hidden">Incorrect password.</p>
         <button id="btn-admin-login-submit" class="btn-primary">Sign In</button>
+        <button id="btn-forgot-password" class="login-link-btn" type="button">Forgot password?</button>
         <button id="btn-install-admin-login" class="login-install-btn" type="button">Install admin app</button>
+        <p id="admin-login-status" class="login-status hidden"></p>
         <p class="login-footnote">Authorized staff only. Activity is recorded for museum operations.</p>
+        <p class="login-version" id="login-version-text">—</p>
       </section>
     </div>
   </div>
@@ -91,6 +94,10 @@
         <button class="tab-btn" data-tab="notes" data-page-title="Guestbook">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8z"/><path d="M8 8h8"/><path d="M8 12h5"/></svg>
           <span>Guestbook</span>
+        </button>
+        <button class="tab-btn" data-tab="account" data-page-title="Account &amp; About">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5"/></svg>
+          <span>Account</span>
         </button>
       </nav>
 
@@ -650,6 +657,55 @@
           </div>
         </section>
 
+        <section id="tab-account" class="tab-panel hidden">
+          <div class="section-intro">
+            <div>
+              <h2>Account &amp; About</h2>
+              <p>Your administrator sign-in and the build this browser is running.</p>
+            </div>
+          </div>
+
+          <div class="account-grid">
+            <section class="panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Security</p>
+                  <h3>Change Password</h3>
+                </div>
+              </header>
+              <p class="panel-note">Signed in as <strong id="account-email">—</strong></p>
+              <label class="field-label" for="account-current-password">Current password</label>
+              <input id="account-current-password" class="text-input" type="password" autocomplete="current-password" placeholder="Enter the current password" />
+              <label class="field-label" for="account-new-password">New password</label>
+              <input id="account-new-password" class="text-input" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+              <label class="field-label" for="account-confirm-password">Confirm new password</label>
+              <input id="account-confirm-password" class="text-input" type="password" autocomplete="new-password" placeholder="Repeat the new password" />
+              <p id="account-password-status" class="account-status hidden"></p>
+              <div class="account-actions">
+                <button id="btn-change-password" class="btn-primary" type="button">Update Password</button>
+                <button id="btn-send-reset-email" class="btn-secondary" type="button">Email Reset Link</button>
+              </div>
+              <p class="panel-footnote">The password lives in Firebase Authentication, never in the app files, so it can be changed here at any time and applies to every device that signs in.</p>
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Release</p>
+                  <h3>Console Version</h3>
+                </div>
+              </header>
+              <p class="account-version" id="admin-version-text">—</p>
+              <p id="admin-update-status" class="account-status hidden"></p>
+              <div class="account-actions">
+                <button id="btn-check-admin-updates" class="btn-secondary" type="button">Check for Updates</button>
+                <button id="btn-load-admin-update" class="btn-primary hidden" type="button">Reload New Build</button>
+              </div>
+              <p class="panel-footnote">The build number is the version of admin.js this browser actually loaded. When a newer build is deployed, reload to pick it up — the offline copy is cleared for you.</p>
+            </section>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
@@ -683,6 +739,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=16" defer></script>
+  <script src="admin.js?v=17" defer></script>
 </body>
 </html>

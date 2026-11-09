@@ -7,6 +7,35 @@ const BACKGROUND_IMAGE = "./assets/background.jpg";
 const AR_BUNDLE_CACHE_KEY = "museum_ar_bundle_v1";
 
 // -------------------------------------------------------------------
+// Release info — shown in Settings so anyone can tell at a glance
+// whether the app on screen is the newest deployment. APP_VERSION is
+// shared with the admin console through asset-manifest.js; the build
+// number is read back from the ?v= suffix that index.html asked the
+// browser to load, so the label can never drift from the files.
+// -------------------------------------------------------------------
+const RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
+
+function readAssetBuild(scriptName) {
+  const scripts = Array.from(document.scripts || []);
+  const script = scripts.find((tag) => (tag.src || "").indexOf(scriptName) !== -1);
+  const match = script && /[?&]v=(\d+)/.exec(script.src);
+  return match ? Number(match[1]) : 0;
+}
+
+const APP_BUILD = readAssetBuild("app.js");
+
+function appVersionLabel(build) {
+  const value = build === undefined ? APP_BUILD : build;
+  return value ? `v${RELEASE_VERSION} · build ${value}` : `v${RELEASE_VERSION}`;
+}
+
+// A reload after "Update" arrives as ?updated=<timestamp>. Drop it again so the
+// address bar stays clean and shared links keep working.
+if (window.location.search.indexOf("updated=") !== -1) {
+  window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+}
+
+// -------------------------------------------------------------------
 // Built-in artworks (local assets). Uploaded artworks are merged
 // from Firebase at runtime.
 // -------------------------------------------------------------------
@@ -258,6 +287,9 @@ const btnSettingsBack = document.getElementById("btn-settings-back");
 const settingsCurrentName = document.getElementById("settings-current-name");
 const settingsChangeName = document.getElementById("settings-change-name");
 const settingsReplayTutorial = document.getElementById("settings-replay-tutorial");
+const settingsVersionText = document.getElementById("settings-version-text");
+const settingsUpdateStatus = document.getElementById("settings-update-status");
+const btnCheckUpdates = document.getElementById("btn-check-updates");
 
 const leaderboardList = document.getElementById("leaderboard-list");
 const notesBoardWrap = document.getElementById("notes-board-wrap");
@@ -670,10 +702,111 @@ function showLibrary() {
   setBgLayerForScreen(false);
 }
 
+// -------------------------------------------------------------------
+// App version + update check
+// The service worker answers from cache, so a deploy only reaches the
+// device after the caches are cleared. Settings shows the running build
+// and can fetch the deployed index.html (cache-busted) to say whether a
+// newer build is waiting.
+// -------------------------------------------------------------------
+const UPDATE_CHECK_TIMEOUT_MS = 8000;
+let appUpdateCheckDone = false;
+
+function setUpdateStatus(message, state) {
+  if (!settingsUpdateStatus) return;
+  settingsUpdateStatus.textContent = message;
+  settingsUpdateStatus.className = `settings-update-status${state ? ` ${state}` : ""}`;
+}
+
+async function fetchDeployedAppBuild() {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS) : null;
+  try {
+    const response = await fetch(`./index.html?_=${Date.now()}`, {
+      cache: "no-store",
+      signal: controller ? controller.signal : undefined,
+    });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const html = await response.text();
+    const match = /app\.js\?v=(\d+)/.exec(html);
+    return match ? Number(match[1]) : 0;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function renderAppVersionInfo() {
+  if (settingsVersionText) settingsVersionText.textContent = appVersionLabel();
+}
+
+async function checkForAppUpdates() {
+  if (!btnCheckUpdates) return;
+  btnCheckUpdates.disabled = true;
+  setUpdateStatus("Checking the deployed build…");
+  try {
+    const deployedBuild = await fetchDeployedAppBuild();
+    if (!deployedBuild) {
+      setUpdateStatus("Could not read the deployed build.", "is-error");
+      return;
+    }
+    if (deployedBuild > APP_BUILD) {
+      setUpdateStatus(`New build ${deployedBuild} is ready — tap Update.`);
+      btnCheckUpdates.textContent = "Update";
+      btnCheckUpdates.dataset.mode = "update";
+      btnCheckUpdates.classList.add("is-update");
+    } else {
+      setUpdateStatus("You are on the latest version.", "is-current");
+      btnCheckUpdates.textContent = "Check";
+      delete btnCheckUpdates.dataset.mode;
+      btnCheckUpdates.classList.remove("is-update");
+    }
+  } catch (error) {
+    console.warn("[Updates] Check failed:", error);
+    setUpdateStatus("Could not check — you may be offline.", "is-error");
+  } finally {
+    btnCheckUpdates.disabled = false;
+    appUpdateCheckDone = true;
+  }
+}
+
+async function loadLatestVersion() {
+  if (!btnCheckUpdates) return;
+  btnCheckUpdates.disabled = true;
+  setUpdateStatus("Loading the new version…");
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+    if (window.caches && typeof caches.keys === "function") {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.filter((name) => name.indexOf("gbr-museum-") === 0).map((name) => caches.delete(name))
+      );
+    }
+  } catch (error) {
+    console.warn("[Updates] Could not clear the offline cache:", error);
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("updated", String(Date.now()));
+  window.location.replace(url.toString());
+}
+
+if (btnCheckUpdates) {
+  btnCheckUpdates.addEventListener("click", () => {
+    if (btnCheckUpdates.dataset.mode === "update") loadLatestVersion();
+    else checkForAppUpdates();
+  });
+}
+
 function showSettings() {
   hideAllScreens();
   animateScreenIn(screenSettings, "enter-top");
   settingsCurrentName.textContent = `Currently: ${currentUsername || "—"}`;
+  renderAppVersionInfo();
+  // One automatic check per page load keeps the status honest without asking
+  // the host every single time Settings is opened.
+  if (!appUpdateCheckDone) checkForAppUpdates();
   screenSettings.classList.remove("hidden");
   bottomNav.classList.add("hidden");
   setBgLayerForScreen(false);
