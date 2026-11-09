@@ -146,10 +146,11 @@ function artworkHasQuiz(art) {
 }
 
 function getQuizStatus(art) {
-  if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz" };
-  if (art.quizCompleted) return { state: "done", label: "✓ Quiz done" };
-  if (!art.unlocked) return { state: "locked", label: "Quiz not taken" };
-  return { state: "pending", label: "Quiz not taken" };
+  // Kept to a single word (plus a check when it is finished) so the pill stays
+  // narrow on the artwork cards instead of stretching across the image.
+  if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz", title: "No quiz for this artwork" };
+  if (art.quizCompleted) return { state: "done", label: "Quiz ✓", title: "Quiz completed" };
+  return { state: art.unlocked ? "pending" : "locked", label: "Quiz", title: "Quiz not taken yet" };
 }
 
 // -------------------------------------------------------------------
@@ -556,7 +557,7 @@ function renderGallery() {
            onerror="this.style.display='none'; this.closest('.art-card').querySelector('.art-card-fallback').style.display='flex';" />
       <div class="art-card-fallback" style="display:none;">${art.icon}</div>
       <div class="art-card-scrim"></div>
-      <div class="quiz-status-pill ${quizStatus.state}">${quizStatus.label}</div>
+      <div class="quiz-status-pill ${quizStatus.state}" title="${quizStatus.title}">${quizStatus.label}</div>
       ${statusBadge}
       <div class="art-card-caption">
         <h3>${art.name}</h3>
@@ -807,6 +808,7 @@ function hideUnlockModal() {
     const nextBadge = pendingBadgeUnlocks.shift();
     setTimeout(() => showBadgeUnlockModal(nextBadge), 320);
   }
+  scheduleDeferredModelReveal();
 }
 btnKeepScanning.addEventListener("click", hideUnlockModal);
 btnViewCollection.addEventListener("click", () => {
@@ -846,6 +848,7 @@ function hideBadgeUnlockModal() {
     const nextBadge = pendingBadgeUnlocks.shift();
     setTimeout(() => showBadgeUnlockModal(nextBadge), 320);
   }
+  scheduleDeferredModelReveal();
 }
 
 btnBadgeDismiss.addEventListener("click", hideBadgeUnlockModal);
@@ -1990,7 +1993,9 @@ let arInitialized = false;
 let arScannable = [];
 
 function applyTransform() {
-  if (!activeModelEl) return;
+  // Pinch/drag is ignored while the reveal is running so the two animations
+  // do not fight over the scale.
+  if (!activeModelEl || isModelRevealing(activeModelEl)) return;
   activeModelEl.setAttribute("scale", `${currentScale} ${currentScale} ${currentScale}`);
   activeModelEl.setAttribute("rotation", `${currentRotX} ${currentRotY} 0`);
 }
@@ -2017,6 +2022,16 @@ window.addEventListener(
   "touchmove",
   (e) => {
     if (screenScanner.classList.contains("hidden") || !activeModelEl) return;
+    if (isModelRevealing(activeModelEl)) {
+      // Keep the gesture anchors fresh but ignore the movement: the reveal
+      // animation owns the transform until it finishes.
+      if (e.touches.length === 2) lastPinchDistance = getPinchDistance(e.touches);
+      else if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+      return;
+    }
 
     if (e.touches.length === 2 && lastPinchDistance !== null) {
       const newDistance = getPinchDistance(e.touches);
@@ -2086,6 +2101,166 @@ function disposeMaterial(material) {
 }
 
 // -------------------------------------------------------------------
+// Model reveal: the 3D model rises and fades in instead of popping in
+// -------------------------------------------------------------------
+const MODEL_REVEAL_DURATION = 720;      // ms for the full rise
+const MODEL_REVEAL_LIFT_RATIO = 0.22;   // rise distance relative to the model scale
+const MODEL_REVEAL_LIFT_MAX = 0.2;      // cap so big models do not fly in from far away
+const MODEL_REVEAL_START_SCALE = 0.62;  // the model starts this small and grows into place
+
+const modelReveals = new Map();            // modelEl -> { frame, materials }
+const pendingModelReveals = new WeakSet(); // entities still waiting for their mesh
+const deferredModelReveals = new Map();    // modelEl -> art, waiting for the unlock card to close
+let deferredModelRevealTimer = null;
+
+// The scan card is a full-screen overlay at 75% black, so anything revealed
+// underneath it is lost. Reveals wait for it to close instead.
+function arCardOpen() {
+  return (
+    !unlockModal.classList.contains("hidden") ||
+    !badgeUnlockModal.classList.contains("hidden")
+  );
+}
+
+function scheduleDeferredModelReveal() {
+  clearTimeout(deferredModelRevealTimer);
+  deferredModelRevealTimer = setTimeout(() => {
+    const modelEl = activeModelEl;
+    if (!modelEl || !deferredModelReveals.has(modelEl)) return;
+    // A queued badge card can take over 320 ms after the scan card closes, so
+    // re-check whether the scanner is really visible again.
+    if (arCardOpen()) return;
+    const art = deferredModelReveals.get(modelEl);
+    deferredModelReveals.delete(modelEl);
+    beginModelReveal(modelEl, art);
+  }, 400);
+}
+
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function collectModelMaterials(modelEl) {
+  const mesh = modelEl.getObject3D("mesh");
+  const materials = [];
+  if (!mesh) return materials;
+  mesh.traverse((obj) => {
+    if (!obj.material) return;
+    const list = Array.isArray(obj.material) ? obj.material : [obj.material];
+    list.forEach((material) => {
+      if (material && materials.indexOf(material) === -1) materials.push(material);
+    });
+  });
+  return materials;
+}
+
+function restoreModelMaterials(reveal) {
+  reveal.materials.forEach(({ material, opacity, transparent }) => {
+    material.opacity = opacity;
+    material.transparent = transparent;
+  });
+}
+
+function isModelRevealing(modelEl) {
+  // A queued reveal also owns the transform, otherwise a pinch during the scan
+  // card would be undone when the rise finally starts.
+  return !!modelEl && (modelReveals.has(modelEl) || deferredModelReveals.has(modelEl));
+}
+
+function cancelModelReveal(modelEl) {
+  if (!modelEl) return;
+  pendingModelReveals.delete(modelEl);
+  deferredModelReveals.delete(modelEl);
+  const reveal = modelReveals.get(modelEl);
+  if (!reveal) return;
+  cancelAnimationFrame(reveal.frame);
+  modelReveals.delete(modelEl);
+  restoreModelMaterials(reveal);
+}
+
+function beginModelReveal(modelEl, art) {
+  if (!modelEl || !art.modelObj) return;
+  cancelModelReveal(modelEl);
+
+  const finalScale = Number(art.baseScale) || 0.5;
+  const finalZ = Number(art.modelPositionZ ?? 0.1);
+  const lift = Math.min(MODEL_REVEAL_LIFT_MAX, finalScale * MODEL_REVEAL_LIFT_RATIO);
+  const startScale = finalScale * MODEL_REVEAL_START_SCALE;
+  const materials = collectModelMaterials(modelEl);
+  const object3D = modelEl.object3D;
+
+  // Park the model at the start of the rise *before* showing it again so the
+  // first visible frame is already the small, low version instead of a
+  // full-size model popping into place.
+  object3D.position.set(0, -lift, finalZ);
+  object3D.scale.setScalar(startScale);
+
+  // The scan card covers the whole scanner, so a rise started now would play
+  // where nobody can see it. Keep the model parked and hidden, then let
+  // scheduleDeferredModelReveal() finish it once the card is dismissed.
+  if (arCardOpen()) {
+    deferredModelReveals.set(modelEl, art);
+    modelEl.setAttribute("visible", "false");
+    return;
+  }
+  deferredModelReveals.delete(modelEl);
+  modelEl.setAttribute("visible", "true");
+
+  const reduceMotion =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    object3D.position.set(0, 0, finalZ);
+    object3D.scale.setScalar(finalScale);
+    return;
+  }
+
+  if (!materials.length) {
+    // glTF/OBJ is still downloading — the rise starts from the model-loaded handler.
+    pendingModelReveals.add(modelEl);
+    return;
+  }
+  pendingModelReveals.delete(modelEl);
+
+  const reveal = {
+    frame: null,
+    materials: materials.map((material) => ({
+      material,
+      opacity: material.opacity,
+      transparent: material.transparent,
+    })),
+  };
+  materials.forEach((material) => {
+    material.transparent = true;
+    material.opacity = 0;
+  });
+  modelReveals.set(modelEl, reveal);
+
+  const startTime = performance.now();
+  const step = (now) => {
+    if (modelReveals.get(modelEl) !== reveal) return;
+    const t = Math.min(1, (now - startTime) / MODEL_REVEAL_DURATION);
+    const eased = easeOutCubic(t);
+    object3D.position.y = -lift * (1 - eased);
+    object3D.scale.setScalar(startScale + (finalScale - startScale) * eased);
+    materials.forEach((material) => {
+      material.opacity = eased;
+    });
+    if (t < 1) {
+      reveal.frame = requestAnimationFrame(step);
+      return;
+    }
+    // Land exactly on the configured transform and hand the materials back to
+    // their original transparent/opacity settings.
+    object3D.position.set(0, 0, finalZ);
+    object3D.scale.setScalar(finalScale);
+    modelReveals.delete(modelEl);
+    restoreModelMaterials(reveal);
+  };
+  reveal.frame = requestAnimationFrame(step);
+}
+
+// -------------------------------------------------------------------
 // Target found / lost
 // -------------------------------------------------------------------
 function getOrCreateModelEntity(art, targetIndex, targetEl) {
@@ -2093,7 +2268,8 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
 
   let modelEl = document.getElementById(`model-${targetIndex}`);
   if (modelEl) {
-    modelEl.setAttribute("visible", "true");
+    // Visibility is handled by beginModelReveal() so the model never flashes at
+    // full size before the rise animation starts.
     return modelEl;
   }
 
@@ -2120,6 +2296,8 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
     if (activeModelEl === modelEl) {
       scanHint.textContent = "Pinch to zoom · Drag to rotate";
     }
+    // The first reveal is parked until the mesh exists, so start it now.
+    if (pendingModelReveals.has(modelEl)) beginModelReveal(modelEl, art);
   });
 
   modelEl.addEventListener("model-error", (e) => {
@@ -2162,6 +2340,10 @@ function handleTargetFound(art, targetIndex, targetEl) {
   showUnlockModal(art, wasAlreadyUnlocked);
   if (!wasAlreadyUnlocked) celebrateFirstUnlock();
 
+  // Queued only after the card is on screen: the reveal parks the model until
+  // the card closes so the rise is visible on the scanner, not behind the card.
+  beginModelReveal(modelEl, art);
+
   if (firstTimeEver) awardBadge("firstScan");
   checkAllUnlockedBadge();
 }
@@ -2173,6 +2355,7 @@ function handleTargetLost(targetIndex) {
   // Keep the model in memory to avoid costly re-fetching over slow/flaky signal; simply hide it
   const modelEl = document.getElementById(`model-${targetIndex}`);
   if (modelEl) {
+    cancelModelReveal(modelEl);
     modelEl.setAttribute("visible", "false");
   }
 
@@ -2353,6 +2536,7 @@ function stopAR() {
   arScannable.forEach((_, i) => {
     const modelEl = document.getElementById(`model-${i}`);
     if (modelEl) {
+      cancelModelReveal(modelEl);
       disposeModel(modelEl);
       modelEl.remove();
     }
