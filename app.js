@@ -176,9 +176,13 @@ function artworkHasQuiz(art) {
 
 function getQuizStatus(art) {
   // Kept to a single word (plus a check when it is finished) so the pill stays
-  // narrow on the artwork cards instead of stretching across the image.
+  // narrow on the artwork cards instead of stretching across the image. The
+  // best score rides along in the tooltip instead of widening the pill.
   if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz", title: "No quiz for this artwork" };
-  if (art.quizCompleted) return { state: "done", label: "Quiz ✓", title: "Quiz completed" };
+  if (art.quizCompleted) {
+    const best = art.quizBest ? ` · best ${art.quizBest.correct}/${art.quizBest.total}` : "";
+    return { state: "done", label: "Quiz ✓", title: `Quiz completed${best}` };
+  }
   return { state: art.unlocked ? "pending" : "locked", label: "Quiz", title: "Quiz not taken yet" };
 }
 
@@ -244,12 +248,36 @@ const detailText = document.getElementById("detail-text");
 const btnDetailBack = document.getElementById("btn-detail-back");
 const btnTakeQuiz = document.getElementById("btn-take-quiz");
 const quizDoneNote = document.getElementById("quiz-done-note");
+const quizDetailMeta = document.getElementById("quiz-detail-meta");
 const quizProgress = document.getElementById("quiz-progress");
+const quizProgressTrack = document.getElementById("quiz-progress-track");
+const quizProgressFill = document.getElementById("quiz-progress-fill");
+const quizScore = document.getElementById("quiz-score");
+const quizQuestionView = document.getElementById("quiz-question-view");
+const quizBody = document.getElementById("quiz-body");
+const quizArtwork = document.getElementById("quiz-artwork");
 const quizQuestion = document.getElementById("quiz-question");
 const quizOptions = document.getElementById("quiz-options");
 const quizFeedback = document.getElementById("quiz-feedback");
+const quizFeedbackIcon = document.getElementById("quiz-feedback-icon");
+const quizFeedbackTitle = document.getElementById("quiz-feedback-title");
+const quizFeedbackText = document.getElementById("quiz-feedback-text");
 const btnQuizNext = document.getElementById("btn-quiz-next");
 const btnQuizBack = document.getElementById("btn-quiz-back");
+const quizResultView = document.getElementById("quiz-result-view");
+const quizResultRing = document.getElementById("quiz-result-ring");
+const quizResultPercent = document.getElementById("quiz-result-percent");
+const quizResultEyebrow = document.getElementById("quiz-result-eyebrow");
+const quizResultTitle = document.getElementById("quiz-result-title");
+const quizResultScore = document.getElementById("quiz-result-score");
+const quizResultDots = document.getElementById("quiz-result-dots");
+const quizResultBest = document.getElementById("quiz-result-best");
+const quizBadgeChips = document.getElementById("quiz-badge-chips");
+const btnQuizRetake = document.getElementById("btn-quiz-retake");
+const btnQuizDone = document.getElementById("btn-quiz-done");
+const quizLeaveConfirm = document.getElementById("quiz-leave-confirm");
+const btnQuizStay = document.getElementById("btn-quiz-stay");
+const btnQuizLeave = document.getElementById("btn-quiz-leave");
 
 const btnOpenBadges = document.getElementById("btn-open-badges");
 const btnBadgesBack = document.getElementById("btn-badges-back");
@@ -398,6 +426,11 @@ function persistProgress() {
     username: currentUsername,
     unlocked: artworks.filter((art) => art.unlocked).map((art) => art.id),
     quizCompleted: artworks.filter((art) => art.quizCompleted).map((art) => art.id),
+    // Best score per artwork, so a retake can show whether it improved. Older
+    // saves simply have no key here and restore without a best score.
+    quizBest: Object.fromEntries(
+      artworks.filter((art) => art.quizBest).map((art) => [art.id, art.quizBest])
+    ),
     badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned])),
     sessionStartTime,
     finalElapsedSeconds,
@@ -416,9 +449,15 @@ function restoreProgress() {
     leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
     const unlocked = new Set(progress.unlocked || []);
     const quizCompleted = new Set(progress.quizCompleted || []);
+    const quizBest = progress.quizBest || {};
     artworks.forEach((art) => {
       art.unlocked = unlocked.has(art.id);
       art.quizCompleted = quizCompleted.has(art.id);
+      const best = quizBest[art.id];
+      art.quizBest = best && Number.isFinite(best.correct) ? {
+        correct: best.correct,
+        total: Number(best.total) || (art.quiz ? art.quiz.length : 0)
+      } : null;
     });
     Object.entries(progress.badges || {}).forEach(([key, earned]) => {
       if (badges[key]) badges[key].earned = Boolean(earned);
@@ -1006,13 +1045,15 @@ function showBadgeToast(badge) {
   badgeToastTimer = setTimeout(() => badgeToast.classList.add("hidden"), 2600);
 }
 
-function awardBadge(key) {
+function awardBadge(key, options = {}) {
   const badge = badges[key];
   if (!badge || badge.earned) return;
   badge.earned = true;
   persistProgress();
   showBadgeToast(badge);
-  showBadgeUnlockModal(badge);
+  // The quiz result card is its own reward screen, so it defers the full-screen
+  // celebration instead of having the modal cover the score straight away.
+  if (options.celebrate !== false) showBadgeUnlockModal(badge);
   checkAllBadgesBadge();
   if (allBadgesEarned()) updateNotesGate();
 }
@@ -1026,9 +1067,9 @@ function checkAllUnlockedBadge() {
   if (collection.length > 0 && collection.every((a) => a.unlocked)) awardBadge("allUnlocked");
 }
 
-function checkAllQuizzesBadge() {
+function checkAllQuizzesBadge(options) {
   const quizArtworks = getCollectionArtworks().filter((a) => artworkHasQuiz(a));
-  if (quizArtworks.length > 0 && quizArtworks.every((a) => a.quizCompleted)) awardBadge("allQuizzes");
+  if (quizArtworks.length > 0 && quizArtworks.every((a) => a.quizCompleted)) awardBadge("allQuizzes", options);
 }
 
 function checkAllBadgesBadge() {
@@ -1435,6 +1476,16 @@ function openDetail(artworkId) {
   btnTakeQuiz.classList.toggle("hidden", !hasQuiz);
   btnTakeQuiz.textContent = art.quizCompleted ? "Retake the Quiz" : "Take the Quiz";
   quizDoneNote.classList.toggle("hidden", !art.quizCompleted);
+  if (art.quizBest) {
+    quizDoneNote.textContent = `✓ Quiz completed · best ${art.quizBest.correct} of ${art.quizBest.total}`;
+  } else {
+    quizDoneNote.textContent = "✓ Quiz completed";
+  }
+  quizDetailMeta.classList.toggle("hidden", !hasQuiz);
+  if (hasQuiz) {
+    const total = art.quiz.length;
+    quizDetailMeta.textContent = `${total} ${total === 1 ? "question" : "questions"} · no time limit`;
+  }
 
   const hasImmersive = !!art.immersiveSkybox;
   btnImmersive.classList.toggle("hidden", !hasImmersive);
@@ -1449,9 +1500,31 @@ btnDetailBack.addEventListener("click", showHome);
 
 // -------------------------------------------------------------------
 // Artwork quizzes
+// One question at a time, with a progress bar and a running score, then a
+// result card with the percentage and a per-question breakdown. Best scores
+// are kept in localStorage so a retake can show whether it improved.
 // -------------------------------------------------------------------
+const QUIZ_RING_CIRCUMFERENCE = 2 * Math.PI * 52; // result ring radius
+const QUIZ_OPTION_KEYS = "ABCDEFGH";
+const QUIZ_BADGE_DELAY_MS = 700;
+
 let quizArtId = null;
 let quizIndex = 0;
+let quizAnswers = []; // { selected, correct } per answered question
+let quizRunId = 0;
+let quizBadgeTimer = null;
+
+function getQuizArtwork() {
+  return artworks.find((a) => a.id === quizArtId) || null;
+}
+
+function countQuizCorrect() {
+  return quizAnswers.filter((answer) => answer && answer.correct).length;
+}
+
+function quizOptionKey(index) {
+  return QUIZ_OPTION_KEYS[index] || String(index + 1);
+}
 
 function startQuiz(artworkId) {
   const art = artworks.find((a) => a.id === artworkId);
@@ -1459,83 +1532,325 @@ function startQuiz(artworkId) {
 
   quizArtId = artworkId;
   quizIndex = 0;
+  quizAnswers = [];
+  quizRunId += 1;
+  clearTimeout(quizBadgeTimer);
 
   hideAllScreens();
   screenQuiz.classList.remove("hidden");
+  animateScreenIn(screenQuiz, "enter-top");
   bottomNav.classList.add("hidden");
+
+  quizResultView.classList.add("hidden");
+  quizLeaveConfirm.classList.add("hidden");
+  quizQuestionView.classList.remove("hidden");
+  quizBadgeChips.innerHTML = "";
+
   renderQuizQuestion();
 }
 
+function updateQuizScorePill(animate) {
+  const correct = countQuizCorrect();
+  quizScore.textContent = `✓ ${correct}`;
+  quizScore.classList.toggle("is-zero", correct === 0);
+  quizScore.classList.remove("bump");
+  if (animate) {
+    // Reflow so the pop replays on every new correct answer.
+    void quizScore.offsetWidth;
+    quizScore.classList.add("bump");
+  }
+}
+
+function updateQuizProgress(total) {
+  const percent = total ? Math.round(((quizIndex + 1) / total) * 100) : 0;
+  quizProgressFill.style.width = `${percent}%`;
+  quizProgressTrack.setAttribute("aria-valuenow", String(percent));
+  quizProgress.textContent = `Question ${quizIndex + 1} of ${total}`;
+}
+
 function renderQuizQuestion() {
-  const art = artworks.find((a) => a.id === quizArtId);
+  const art = getQuizArtwork();
   if (!art) return;
   const question = art.quiz[quizIndex];
+  if (!question) return;
 
-  quizProgress.textContent = `Question ${quizIndex + 1} / ${art.quiz.length}`;
+  quizQuestionView.classList.remove("hidden");
+  quizResultView.classList.add("hidden");
+  quizLeaveConfirm.classList.add("hidden");
+
+  quizArtwork.textContent = art.name;
   quizQuestion.textContent = question.question;
+  updateQuizProgress(art.quiz.length);
+  updateQuizScorePill(false);
+
   quizFeedback.classList.add("hidden");
-  quizFeedback.className = "quiz-feedback hidden";
+  quizFeedback.classList.remove("correct", "incorrect");
+  quizFeedbackIcon.textContent = "✓";
+  quizFeedbackTitle.textContent = "Correct!";
+  quizFeedbackText.textContent = "";
+
   btnQuizNext.classList.add("hidden");
-  btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "Finish Quiz" : "Next Question";
+  btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "See Results" : "Next Question";
 
   quizOptions.innerHTML = "";
   question.options.forEach((option, optionIndex) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "quiz-option-btn";
-    button.textContent = option;
+    button.className = "quiz-option-btn stagger-in";
+    button.style.setProperty("--i", optionIndex);
+    button.dataset.index = String(optionIndex);
+
+    const key = document.createElement("span");
+    key.className = "quiz-option-key";
+    key.setAttribute("aria-hidden", "true");
+    key.textContent = quizOptionKey(optionIndex);
+
+    const text = document.createElement("span");
+    text.className = "quiz-option-text";
+    text.textContent = option;
+
+    const mark = document.createElement("span");
+    mark.className = "quiz-option-mark";
+    mark.setAttribute("aria-hidden", "true");
+
+    button.append(key, text, mark);
     button.addEventListener("click", () => selectQuizAnswer(optionIndex));
     quizOptions.appendChild(button);
+  });
+
+  // Reset the scroll and let screen readers announce the new question.
+  quizBody.scrollTop = 0;
+  requestAnimationFrame(() => {
+    quizQuestion.focus({ preventScroll: true });
   });
 }
 
 function selectQuizAnswer(selectedIndex) {
-  const art = artworks.find((a) => a.id === quizArtId);
+  const art = getQuizArtwork();
   if (!art) return;
   const question = art.quiz[quizIndex];
-  const optionButtons = quizOptions.querySelectorAll(".quiz-option-btn");
-  const isCorrect = selectedIndex === question.correctIndex;
+  if (!question) return;
+  if (quizAnswers[quizIndex]) return; // already answered this question
 
+  const isCorrect = selectedIndex === question.correctIndex;
+  quizAnswers[quizIndex] = { selected: selectedIndex, correct: isCorrect };
+
+  const optionButtons = Array.from(quizOptions.querySelectorAll(".quiz-option-btn"));
   optionButtons.forEach((button, index) => {
     button.disabled = true;
-    if (index === question.correctIndex) button.classList.add("correct");
-    else if (index === selectedIndex) button.classList.add("incorrect");
+    const mark = button.querySelector(".quiz-option-mark");
+    const label = `${quizOptionKey(index)}. ${question.options[index]}`;
+    if (index === question.correctIndex) {
+      button.classList.add("correct");
+      if (mark) mark.textContent = "✓";
+      button.setAttribute("aria-label", `${label} — correct answer`);
+    } else if (index === selectedIndex) {
+      button.classList.add("incorrect");
+      if (mark) mark.textContent = "✗";
+      button.setAttribute("aria-label", `${label} — your answer, incorrect`);
+    }
   });
 
-  quizFeedback.textContent = isCorrect
-    ? "Correct!"
-    : "Not quite — the highlighted answer was correct.";
-  quizFeedback.className = "quiz-feedback " + (isCorrect ? "correct" : "incorrect");
+  quizFeedback.classList.remove("hidden", "correct", "incorrect");
+  quizFeedback.classList.add(isCorrect ? "correct" : "incorrect");
+  quizFeedbackIcon.textContent = isCorrect ? "✓" : "✗";
+  quizFeedbackTitle.textContent = isCorrect ? "Correct!" : "Not quite";
+  quizFeedbackText.textContent = isCorrect
+    ? "Nicely spotted — that's the right answer."
+    : `The correct answer was ${quizOptionKey(question.correctIndex)} — ${question.options[question.correctIndex]}.`;
+
   btnQuizNext.classList.remove("hidden");
+  updateQuizScorePill(isCorrect);
+
+  if (navigator.vibrate) {
+    try {
+      navigator.vibrate(isCorrect ? 12 : [12, 55, 12]);
+    } catch (_) {}
+  }
+
+  // Keep the Next button reachable on short screens without dumping the
+  // question off the top of the scroll area.
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  btnQuizNext.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
 }
 
 btnQuizNext.addEventListener("click", () => {
-  const art = artworks.find((a) => a.id === quizArtId);
+  const art = getQuizArtwork();
   if (!art) return;
 
   if (quizIndex < art.quiz.length - 1) {
-    quizIndex++;
+    quizIndex += 1;
     renderQuizQuestion();
     return;
   }
 
-  const wasCompleted = art.quizCompleted;
-  const firstCompletionAnywhere = !artworks.some((a) => a.quizCompleted);
-  art.quizCompleted = true;
-  persistProgress();
-  if (!wasCompleted && firstCompletionAnywhere) awardBadge("firstQuiz");
-  checkAllQuizzesBadge();
-  openDetail(quizArtId);
+  finishQuiz(art);
 });
 
-btnQuizBack.addEventListener("click", () => {
+function finishQuiz(art) {
+  const total = art.quiz.length;
+  const correct = Math.min(countQuizCorrect(), total);
+  const previousBest = art.quizBest || null;
+  const wasCompleted = art.quizCompleted;
+  // Read before marking complete: the badge checks below look at this flag.
+  const firstCompletionAnywhere = !artworks.some((a) => a.quizCompleted);
+  const runId = quizRunId;
+  const earnedBefore = new Set(Object.keys(badges).filter((key) => badges[key].earned));
+
+  art.quizCompleted = true;
+  if (!previousBest || correct > previousBest.correct) {
+    art.quizBest = { correct, total };
+  }
+  persistProgress();
+
+  showQuizResult(art, correct, total, previousBest);
+
+  // Award straight away so the record is kept even if the visitor leaves, but
+  // hold the full-screen celebration back a beat: the result card is the first
+  // thing that should be read.
+  if (!wasCompleted && firstCompletionAnywhere) awardBadge("firstQuiz", { celebrate: false });
+  checkAllQuizzesBadge({ celebrate: false });
+  const earnedNow = Object.keys(badges).filter((key) => badges[key].earned && !earnedBefore.has(key));
+  renderQuizBadgeChips(earnedNow);
+
+  clearTimeout(quizBadgeTimer);
+  if (earnedNow.length > 0) {
+    quizBadgeTimer = setTimeout(() => {
+      // If the visitor has already moved on, the chips and toast did the job.
+      if (runId !== quizRunId) return;
+      showBadgeUnlockModal(badges[earnedNow[earnedNow.length - 1]]);
+    }, QUIZ_BADGE_DELAY_MS);
+  }
+}
+
+function showQuizResult(art, correct, total, previousBest) {
+  quizQuestionView.classList.add("hidden");
+  quizResultView.classList.remove("hidden");
+  quizLeaveConfirm.classList.add("hidden");
+  quizBadgeChips.innerHTML = "";
+
+  const percent = total ? Math.round((correct / total) * 100) : 0;
+  quizResultPercent.textContent = `${percent}%`;
+  quizResultEyebrow.textContent = `Quiz complete · ${art.name}`;
+  quizResultScore.textContent = `${correct} of ${total} correct`;
+
+  // The top bar belongs to the whole screen, so retire the question counter
+  // once the result card is up and leave the bar full.
+  quizProgress.textContent = "Quiz complete";
+  quizProgressFill.style.width = "100%";
+  quizProgressTrack.setAttribute("aria-valuenow", "100");
+
+  let title = "Keep exploring";
+  if (percent === 100) title = "Perfect score!";
+  else if (percent >= 70) title = "Nicely done";
+  else if (percent >= 40) title = "Good effort";
+  quizResultTitle.textContent = title;
+
+  // Grow the ring from empty so the score is felt as well as read.
+  quizResultRing.style.strokeDasharray = String(QUIZ_RING_CIRCUMFERENCE);
+  quizResultRing.style.strokeDashoffset = String(QUIZ_RING_CIRCUMFERENCE);
+  const offset = QUIZ_RING_CIRCUMFERENCE * (1 - (total ? correct / total : 0));
+  requestAnimationFrame(() => {
+    quizResultRing.style.strokeDashoffset = String(offset);
+  });
+
+  quizResultDots.innerHTML = "";
+  for (let index = 0; index < total; index += 1) {
+    const answer = quizAnswers[index];
+    const wasRight = Boolean(answer && answer.correct);
+    const dot = document.createElement("span");
+    dot.className = "quiz-result-dot" + (wasRight ? "" : " is-wrong");
+    dot.style.setProperty("--i", index);
+    dot.textContent = wasRight ? "✓" : "✗";
+    dot.title = `Question ${index + 1}: ${wasRight ? "correct" : "incorrect"}`;
+    quizResultDots.appendChild(dot);
+  }
+
+  const best = art.quizBest || { correct, total };
+  if (previousBest && best.correct > previousBest.correct) {
+    quizResultBest.textContent = `★ New personal best — ${best.correct} of ${best.total}`;
+    quizResultBest.classList.remove("hidden");
+  } else if (previousBest) {
+    quizResultBest.textContent = `Personal best: ${best.correct} of ${best.total}`;
+    quizResultBest.classList.remove("hidden");
+  } else {
+    quizResultBest.classList.add("hidden");
+  }
+
+  requestAnimationFrame(() => {
+    quizResultView.focus({ preventScroll: true });
+  });
+}
+
+function renderQuizBadgeChips(keys) {
+  quizBadgeChips.innerHTML = "";
+  keys.forEach((key, index) => {
+    const badge = badges[key];
+    if (!badge) return;
+    const chip = document.createElement("span");
+    chip.className = "quiz-badge-chip";
+    chip.style.setProperty("--i", index);
+    chip.textContent = `✦ Badge earned: ${badge.name}`;
+    quizBadgeChips.appendChild(chip);
+  });
+}
+
+function leaveQuiz() {
+  quizLeaveConfirm.classList.add("hidden");
   if (quizArtId) openDetail(quizArtId);
+  else showHome();
+}
+
+btnQuizBack.addEventListener("click", () => {
+  const art = getQuizArtwork();
+  const answered = quizAnswers.filter(Boolean).length;
+  const halfway = art && answered > 0 && answered < art.quiz.length && quizResultView.classList.contains("hidden");
+  if (halfway) {
+    // Answers only live in memory until the quiz is finished, so confirm first.
+    quizLeaveConfirm.classList.remove("hidden");
+    btnQuizStay.focus({ preventScroll: true });
+    return;
+  }
+  leaveQuiz();
+});
+
+btnQuizStay.addEventListener("click", () => {
+  quizLeaveConfirm.classList.add("hidden");
+  if (!btnQuizNext.classList.contains("hidden")) {
+    btnQuizNext.focus({ preventScroll: true });
+  } else {
+    quizQuestion.focus({ preventScroll: true });
+  }
+});
+
+btnQuizLeave.addEventListener("click", leaveQuiz);
+
+quizLeaveConfirm.addEventListener("click", (event) => {
+  if (event.target === quizLeaveConfirm) quizLeaveConfirm.classList.add("hidden");
+});
+
+screenQuiz.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !quizLeaveConfirm.classList.contains("hidden")) {
+    event.preventDefault();
+    quizLeaveConfirm.classList.add("hidden");
+    quizQuestion.focus({ preventScroll: true });
+  }
+});
+
+btnQuizRetake.addEventListener("click", () => {
+  if (quizArtId) startQuiz(quizArtId);
+});
+
+btnQuizDone.addEventListener("click", () => {
+  const art = getQuizArtwork();
+  if (art) openDetail(art.id);
   else showHome();
 });
 
 btnTakeQuiz.addEventListener("click", () => {
   if (currentDetailArtId) startQuiz(currentDetailArtId);
 });
+
 
 // -------------------------------------------------------------------
 // Firebase: leaderboard

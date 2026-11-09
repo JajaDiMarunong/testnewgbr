@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=36" />
+<link rel="stylesheet" href="style.css?v=37" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -147,6 +147,7 @@
         <p class="eyebrow" id="detail-eyebrow">Unlocked Artwork</p>
         <h2 id="detail-title">—</h2>
         <p id="detail-text" class="detail-text">—</p>
+        <p id="quiz-detail-meta" class="quiz-detail-meta hidden">—</p>
         <button id="btn-take-quiz" class="btn-primary hidden">Take the Quiz</button>
         <p id="quiz-done-note" class="quiz-done-note hidden">✓ Quiz completed</p>
         <button id="btn-immersive" class="btn-primary hidden">Enter Immersive View</button>
@@ -155,15 +156,64 @@
   </section>
 
   <section id="screen-quiz" class="screen hidden">
-    <div class="detail-topbar">
+    <div class="quiz-topbar">
       <button id="btn-quiz-back" class="btn-icon">← Back</button>
-      <span id="quiz-progress" class="quiz-progress">Question 1 / 1</span>
+      <div class="quiz-progress-wrap">
+        <div id="quiz-progress-track" class="quiz-progress-track" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="quiz-progress-fill" class="quiz-progress-fill"></div>
+        </div>
+        <span id="quiz-progress" class="quiz-progress">Question 1 of 1</span>
+      </div>
+      <span id="quiz-score" class="quiz-score is-zero" title="Correct answers so far">✓ 0</span>
     </div>
-    <div class="quiz-body">
-      <h2 id="quiz-question">—</h2>
-      <div id="quiz-options" class="quiz-options"></div>
-      <p id="quiz-feedback" class="quiz-feedback hidden">—</p>
-      <button id="btn-quiz-next" class="btn-primary hidden">Next Question</button>
+
+    <div id="quiz-question-view" class="quiz-question-view">
+      <div id="quiz-body" class="quiz-body">
+        <p id="quiz-artwork" class="quiz-artwork">—</p>
+        <h2 id="quiz-question" class="quiz-question-heading" tabindex="-1">—</h2>
+        <div id="quiz-options" class="quiz-options" role="group" aria-labelledby="quiz-question"></div>
+        <div id="quiz-feedback" class="quiz-feedback hidden" role="status" aria-live="polite">
+          <span id="quiz-feedback-icon" class="quiz-feedback-icon" aria-hidden="true">✓</span>
+          <div class="quiz-feedback-copy">
+            <strong id="quiz-feedback-title">Correct!</strong>
+            <p id="quiz-feedback-text">—</p>
+          </div>
+        </div>
+        <button id="btn-quiz-next" class="btn-primary quiz-next hidden">Next Question</button>
+      </div>
+    </div>
+
+    <div id="quiz-result-view" class="quiz-result-view hidden" tabindex="-1">
+      <div class="quiz-result-inner">
+        <div class="quiz-ring-wrap">
+          <svg class="quiz-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="quiz-ring-track" cx="60" cy="60" r="52" />
+            <circle id="quiz-result-ring" class="quiz-ring-progress" cx="60" cy="60" r="52" />
+          </svg>
+          <span id="quiz-result-percent" class="quiz-result-percent">0%</span>
+        </div>
+        <p id="quiz-result-eyebrow" class="quiz-result-eyebrow">Quiz complete</p>
+        <h2 id="quiz-result-title" class="quiz-result-title" tabindex="-1">—</h2>
+        <p id="quiz-result-score" class="quiz-result-score">—</p>
+        <div id="quiz-result-dots" class="quiz-result-dots"></div>
+        <p id="quiz-result-best" class="quiz-result-best hidden">—</p>
+        <div id="quiz-badge-chips" class="quiz-badge-chips"></div>
+        <div class="quiz-result-actions">
+          <button id="btn-quiz-retake" class="btn-secondary">Retake Quiz</button>
+          <button id="btn-quiz-done" class="btn-primary">Back to Artwork</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="quiz-leave-confirm" class="quiz-leave-confirm hidden">
+      <div class="quiz-leave-card">
+        <h3>Leave the quiz?</h3>
+        <p>Your answers so far won't be saved. Finish it to record a score and collect its badge.</p>
+        <div class="quiz-leave-actions">
+          <button id="btn-quiz-stay" class="btn-secondary">Keep Going</button>
+          <button id="btn-quiz-leave" class="btn-primary">Leave Quiz</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -459,6 +509,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=46" defer></script>
+  <script src="app.js?v=47" defer></script>
 </body>
 </html>
