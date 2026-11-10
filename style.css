@@ -623,6 +623,113 @@ button.corner-fabs-right {
 }
 .library-detail-footer .btn-primary { margin-top: 0; }
 
+/* ---------------- Learn More ---------------- */
+/* A quiet gold outline rather than a second filled button: on the detail screen it
+   sits under Take the Quiz, which should stay the brightest thing on the page. */
+.btn-learn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px 18px; min-height: 46px; margin: 0 0 22px 0;
+  border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 13.5px; font-weight: 600;
+  color: var(--frame-gold);
+  background: rgba(201, 168, 118, 0.12);
+  border: 1px solid rgba(201, 168, 118, 0.45);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.btn-learn:active { transform: scale(0.98); }
+.btn-learn:disabled { opacity: 0.55; }
+.btn-learn-ico { font-size: 12px; line-height: 1; }
+/* Inside the library popup the description already ends the scroll area, so the
+   button does not need the detail screen's trailing gap. */
+.library-detail-body .btn-learn { margin: 2px 0 18px 0; }
+
+/* Sits above the library popup (20) because it can be opened from inside it. */
+#learn-modal { z-index: 30; }
+.learn-card {
+  max-width: 400px; width: 100%; max-height: 86vh;
+  padding: 22px 20px calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; text-align: left;
+}
+.learn-head { flex-shrink: 0; }
+.learn-card .modal-eyebrow { margin-bottom: 4px; }
+.learn-card h2 { font-size: 20px; margin: 0; }
+.learn-artwork {
+  font-size: 12.5px; font-style: italic; color: var(--text-dim);
+  margin: 4px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.learn-scroll { flex: 1 1 auto; min-height: 0; margin: 14px 0 0 0; overflow-y: auto; touch-action: pan-y; }
+
+.learn-status { display: flex; align-items: center; gap: 10px; padding: 6px 0 14px 0; font-size: 13px; color: var(--text-dim); }
+.learn-status.hidden { display: none; }
+.learn-status.is-error { color: var(--danger); }
+.learn-spinner {
+  flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid rgba(201, 168, 118, 0.28);
+  border-top-color: var(--frame-gold);
+  animation: learn-spin 0.8s linear infinite;
+}
+@keyframes learn-spin { to { transform: rotate(360deg); } }
+
+/* The spinner only means "still working"; on an error the sentence is the whole
+   message, so the ring would just look like it is still loading. */
+.learn-status.is-error .learn-spinner { display: none; }
+
+.learn-body.hidden { display: none; }
+.learn-summary {
+  font-size: 14px; line-height: 1.62; color: var(--text);
+  margin: 0 0 16px 0; white-space: pre-line;
+}
+.learn-facts {
+  margin: 0 0 16px 0; border-radius: 10px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  display: flex; flex-direction: column;
+}
+.learn-facts.hidden { display: none; }
+.learn-fact {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; font-size: 12.5px;
+}
+.learn-fact + .learn-fact { border-top: 1px solid rgba(244, 241, 234, 0.07); }
+.learn-fact-label {
+  flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 9.5px; color: var(--frame-gold);
+}
+.learn-fact-value { text-align: right; color: var(--text); }
+.learn-caution {
+  font-size: 12px; line-height: 1.5; color: #f0d3bb;
+  margin: 0 0 16px 0; padding: 9px 12px;
+  background: rgba(224, 163, 120, 0.1);
+  border-left: 2px solid rgba(224, 163, 120, 0.55);
+  border-radius: 8px;
+}
+.learn-caution.hidden { display: none; }
+.learn-sources { list-style: none; margin: 0 0 4px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.learn-sources.hidden { display: none; }
+.learn-source a {
+  display: block; padding: 9px 12px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.4; color: var(--text); text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(244, 241, 234, 0.08);
+  word-break: break-word;
+}
+.learn-source a:active { background: rgba(255, 255, 255, 0.08); }
+.learn-source-host { display: block; margin-top: 2px; font-size: 10.5px; color: var(--text-dim); }
+
+/* The disclaimer is not dismissible: it stays put through loading, error and a
+   good answer, because the answer is what needs the caveat. */
+.learn-disclaimer {
+  flex-shrink: 0; margin: 12px 0 0 0; padding-top: 12px;
+  border-top: 1px solid rgba(244, 241, 234, 0.1);
+  font-size: 10.5px; line-height: 1.5; color: var(--text-dim);
+}
+.learn-actions { flex-shrink: 0; display: flex; gap: 10px; margin-top: 12px; }
+.learn-actions .btn-primary { margin-top: 0; flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-spinner { animation: none; }
+}
+
 /* ---------------- Kuya Davon chat head ---------------- */
 .chat-head-btn {
   position: fixed; right: 18px; bottom: calc(var(--nav-height) + 18px);

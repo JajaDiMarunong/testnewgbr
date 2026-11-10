@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=37" />
+<link rel="stylesheet" href="style.css?v=38" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -147,6 +147,9 @@
         <p class="eyebrow" id="detail-eyebrow">Unlocked Artwork</p>
         <h2 id="detail-title">—</h2>
         <p id="detail-text" class="detail-text">—</p>
+        <button id="btn-learn-more" class="btn-learn">
+          <span class="btn-learn-ico" aria-hidden="true">✦</span> Learn More
+        </button>
         <p id="quiz-detail-meta" class="quiz-detail-meta hidden">—</p>
         <button id="btn-take-quiz" class="btn-primary hidden">Take the Quiz</button>
         <p id="quiz-done-note" class="quiz-done-note hidden">✓ Quiz completed</p>
@@ -362,10 +365,50 @@
 
           <p class="library-detail-section-label">About This Piece</p>
           <p id="library-detail-text" class="detail-text">—</p>
+
+          <button id="btn-learn-more-library" class="btn-learn">
+            <span class="btn-learn-ico" aria-hidden="true">✦</span> Learn More
+          </button>
         </div>
       </div>
       <div class="library-detail-footer">
         <button id="btn-library-detail-close" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="learn-modal" class="modal-overlay hidden">
+    <div class="modal-card learn-card" role="dialog" aria-modal="true" aria-labelledby="learn-title">
+      <div class="learn-head">
+        <p class="modal-eyebrow">From Around the Web</p>
+        <h2 id="learn-title">Learn More</h2>
+        <p id="learn-artwork" class="learn-artwork">—</p>
+      </div>
+
+      <div class="learn-scroll">
+        <div id="learn-status" class="learn-status" role="status" aria-live="polite">
+          <span class="learn-spinner" aria-hidden="true"></span>
+          <span id="learn-status-text">Searching the web…</span>
+        </div>
+
+        <div id="learn-body" class="learn-body hidden">
+          <p id="learn-summary" class="learn-summary"></p>
+          <div id="learn-facts" class="learn-facts hidden"></div>
+          <p id="learn-caution" class="learn-caution hidden"></p>
+
+          <p id="learn-sources-label" class="library-detail-section-label hidden">Sources</p>
+          <ul id="learn-sources" class="learn-sources hidden"></ul>
+        </div>
+      </div>
+
+      <p class="learn-disclaimer">
+        Written automatically from public web pages. Some sources may not be verified —
+        please check with museum staff before citing.
+      </p>
+
+      <div class="learn-actions">
+        <button id="btn-learn-retry" class="btn-secondary hidden">Try Again</button>
+        <button id="btn-learn-close" class="btn-primary">Close</button>
       </div>
     </div>
   </div>
@@ -509,6 +552,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=47" defer></script>
+  <script src="app.js?v=48" defer></script>
 </body>
 </html>

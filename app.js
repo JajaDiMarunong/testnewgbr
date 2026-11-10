@@ -246,6 +246,7 @@ const detailImage = document.getElementById("detail-image");
 const detailTitle = document.getElementById("detail-title");
 const detailText = document.getElementById("detail-text");
 const btnDetailBack = document.getElementById("btn-detail-back");
+const btnLearnMore = document.getElementById("btn-learn-more");
 const btnTakeQuiz = document.getElementById("btn-take-quiz");
 const quizDoneNote = document.getElementById("quiz-done-note");
 const quizDetailMeta = document.getElementById("quiz-detail-meta");
@@ -294,12 +295,26 @@ const libraryDetailTitle = document.getElementById("library-detail-title");
 const libraryDetailText = document.getElementById("library-detail-text");
 const libraryDetailBadge = document.getElementById("library-detail-badge");
 const btnLibraryDetailClose = document.getElementById("btn-library-detail-close");
+const btnLearnMoreLibrary = document.getElementById("btn-learn-more-library");
 const metaRowArtist = document.getElementById("meta-row-artist");
 const metaArtist = document.getElementById("meta-artist");
 const metaRowYear = document.getElementById("meta-row-year");
 const metaYear = document.getElementById("meta-year");
 const metaRowLocation = document.getElementById("meta-row-location");
 const metaLocation = document.getElementById("meta-location");
+
+const learnModal = document.getElementById("learn-modal");
+const learnArtwork = document.getElementById("learn-artwork");
+const learnStatus = document.getElementById("learn-status");
+const learnStatusText = document.getElementById("learn-status-text");
+const learnBody = document.getElementById("learn-body");
+const learnSummary = document.getElementById("learn-summary");
+const learnFacts = document.getElementById("learn-facts");
+const learnCaution = document.getElementById("learn-caution");
+const learnSourcesLabel = document.getElementById("learn-sources-label");
+const learnSources = document.getElementById("learn-sources");
+const btnLearnClose = document.getElementById("btn-learn-close");
+const btnLearnRetry = document.getElementById("btn-learn-retry");
 
 const chatHeadBtn = document.getElementById("chat-head-btn");
 const chatPanel = document.getElementById("chat-panel");
@@ -1132,7 +1147,12 @@ function renderLibrary() {
   });
 }
 
+// Which artwork the library popup is showing, so its Learn More button knows what
+// to look up without re-reading the DOM.
+let libraryDetailArtId = null;
+
 function openLibraryDetail(art) {
+  libraryDetailArtId = art.id;
   libraryDetailImage.src = art.image;
   libraryDetailImage.alt = art.name;
   libraryDetailTitle.textContent = art.name;
@@ -1497,6 +1517,310 @@ function openDetail(artworkId) {
 }
 
 btnDetailBack.addEventListener("click", showHome);
+
+// -------------------------------------------------------------------
+// Learn More
+// The brief itself is written in a Supabase function (Tavily search, then Groq
+// to rewrite the pages into plain language) because both keys have to stay off
+// the device. This side only decides when to ask, keeps a week of answers on the
+// phone so a return visit is instant, and paints whatever comes back.
+// -------------------------------------------------------------------
+const LEARN_PROXY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/learn-more";
+const LEARN_CACHE_KEY = "museum_learn_cache_v1";
+const LEARN_DEVICE_KEY = "museum_learn_device_v1";
+// Matches the function's own cache, so the phone and the server forget a brief at
+// roughly the same time instead of the app holding a stale one forever.
+const LEARN_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LEARN_CACHE_LIMIT = 30;
+// The function gives up at ~30 s (search + up to 13 s of summarising), so the app
+// waits a little longer before blaming the network.
+const LEARN_TIMEOUT_MS = 34000;
+
+let learnArtId = null;
+let learnRequestSeq = 0;
+let learnController = null;
+// True between the tap and the answer, so a second tap cannot spend a second
+// search while the first is still running.
+let learnBusy = false;
+// Which piece the running lookup belongs to, so a tap on a different piece
+// replaces it instead of reusing an answer that is about to arrive for another.
+let learnPendingId = null;
+
+function getLearnDeviceId() {
+  try {
+    let id = localStorage.getItem(LEARN_DEVICE_KEY);
+    if (!id) {
+      id = (self.crypto && self.crypto.randomUUID)
+        ? self.crypto.randomUUID()
+        : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(LEARN_DEVICE_KEY, id);
+    }
+    return id;
+  } catch (_) {
+    // Private mode / storage disabled: the function simply sees no device id and
+    // falls back to its per-network limit.
+    return "";
+  }
+}
+
+function readLearnCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LEARN_CACHE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function getCachedLearn(artId) {
+  const entry = readLearnCache()[artId];
+  if (!entry || typeof entry !== "object") return null;
+  const at = Number(entry.at) || 0;
+  if (!at || Date.now() - at > LEARN_CACHE_TTL_MS) return null;
+  if (!entry.data || typeof entry.data !== "object") return null;
+  return entry.data;
+}
+
+function saveLearnCache(artId, data) {
+  if (!artId || !data) return;
+  try {
+    const cache = readLearnCache();
+    cache[artId] = { at: Date.now(), data };
+    // Keep the store small: localStorage is shared with the collection and the
+    // notepad, and Safari starts refusing writes when it fills up.
+    const entries = Object.entries(cache)
+      .filter(([, entry]) => entry && typeof entry === "object")
+      .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
+      .slice(0, LEARN_CACHE_LIMIT);
+    localStorage.setItem(LEARN_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch (_) { /* storage full or blocked: the next open simply asks again */ }
+}
+
+function learnHostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (_) {
+    return "";
+  }
+}
+
+function learnArtworkLine(art) {
+  const meta = [art.artist, art.year].filter(Boolean).join(" · ");
+  return meta ? `${art.name} — ${meta}` : art.name;
+}
+
+// The function already writes visitor-facing copy for the cases it understands
+// (credits used up, busy, no notes found), so its wording wins; the fallbacks
+// below only cover a network drop or an unparseable body.
+function learnErrorMessage(status, payload) {
+  const serverMessage = payload && typeof payload.error === "string" ? payload.error.trim() : "";
+  if (serverMessage) return serverMessage;
+  if (status === 0) return "Couldn't reach the web. Check your connection and try again.";
+  if (status === 429) return "Learn More is busy right now. Please try again in a minute.";
+  if (status >= 500) return "The notes service is resting. Please try again in a moment.";
+  return "Something went wrong looking this up. Please try again.";
+}
+
+function showLearnLoading(art) {
+  learnArtwork.textContent = learnArtworkLine(art);
+  learnStatus.classList.remove("hidden", "is-error");
+  learnStatusText.textContent = "Searching the web for this piece…";
+  learnBody.classList.add("hidden");
+  btnLearnRetry.classList.add("hidden");
+}
+
+function showLearnError(message) {
+  learnStatus.classList.remove("hidden");
+  learnStatus.classList.add("is-error");
+  learnStatusText.textContent = message;
+  learnBody.classList.add("hidden");
+  btnLearnRetry.classList.remove("hidden");
+}
+
+function showLearnResult(payload) {
+  const summary = String(payload.summary || "").trim();
+  const facts = Array.isArray(payload.facts) ? payload.facts : [];
+  const sources = Array.isArray(payload.sources) ? payload.sources : [];
+
+  learnStatus.classList.add("hidden");
+  learnStatus.classList.remove("is-error");
+  btnLearnRetry.classList.add("hidden");
+
+  // engine "sources" means the summariser could not run but the search still
+  // found pages — say so plainly instead of showing an empty card.
+  learnSummary.textContent = summary ||
+    "The search found pages about this piece, but no written brief yet. The links below are a good place to start.";
+
+  const factRows = facts.map((fact) => {
+    const label = escapeHtml(String((fact && fact.label) || ""));
+    const value = escapeHtml(String((fact && fact.value) || ""));
+    if (!label || !value) return "";
+    return `<div class="learn-fact"><span class="learn-fact-label">${label}</span><span class="learn-fact-value">${value}</span></div>`;
+  }).join("");
+  learnFacts.innerHTML = factRows;
+  learnFacts.classList.toggle("hidden", !factRows);
+
+  const caution = String(payload.caution || "").trim();
+  learnCaution.textContent = caution;
+  learnCaution.classList.toggle("hidden", !caution);
+
+  const safeSources = sources
+    .filter((source) => /^https?:\/\//i.test(String((source && source.url) || "")))
+    .slice(0, 6);
+  learnSources.innerHTML = safeSources.map((source) => {
+    const url = escapeHtml(String(source.url));
+    const host = learnHostOf(String(source.url));
+    const title = escapeHtml(String(source.title || host || source.url));
+    return `<li class="learn-source"><a href="${url}" target="_blank" rel="noopener noreferrer">${title}${
+      host ? `<span class="learn-source-host">${escapeHtml(host)}</span>` : ""
+    }</a></li>`;
+  }).join("");
+  learnSourcesLabel.classList.toggle("hidden", safeSources.length === 0);
+  learnSources.classList.toggle("hidden", safeSources.length === 0);
+
+  learnBody.classList.remove("hidden");
+  const scroller = learnModal.querySelector(".learn-scroll");
+  if (scroller) scroller.scrollTop = 0;
+}
+
+async function runLearnLookup(art) {
+  const seq = ++learnRequestSeq;
+  if (learnController) learnController.abort();
+  const controller = new AbortController();
+  learnController = controller;
+  learnBusy = true;
+  learnPendingId = art.id;
+  const timer = setTimeout(() => controller.abort(), LEARN_TIMEOUT_MS);
+  const deviceId = getLearnDeviceId();
+
+  showLearnLoading(art);
+
+  try {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("offline");
+    }
+
+    const res = await fetch(LEARN_PROXY_URL, {
+      method: "POST",
+      headers: Object.assign(
+        { "Content-Type": "application/json" },
+        deviceId ? { "X-Device-Id": deviceId } : {}
+      ),
+      body: JSON.stringify({
+        artId: art.id,
+        name: art.name,
+        artist: art.artist || "",
+        year: art.year || "",
+        location: art.location || "",
+        details: String(art.details || "").slice(0, 600),
+      }),
+      signal: controller.signal,
+    });
+
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (_) { /* function returned no JSON */ }
+
+    if (seq !== learnRequestSeq) return;
+
+    if (!res.ok) {
+      showLearnError(learnErrorMessage(res.status, payload));
+      return;
+    }
+    if (!payload || typeof payload !== "object") {
+      showLearnError("Something went wrong looking this up. Please try again.");
+      return;
+    }
+
+    showLearnResult(payload);
+    // Only a real brief is kept; the "sources only" answer is left uncached so the
+    // next open can still try for a written one.
+    if (payload.summary) saveLearnCache(art.id, payload);
+  } catch (err) {
+    if (seq !== learnRequestSeq) return;
+    if (err && err.message === "offline") {
+      showLearnError("You're offline. Reconnect to load notes from the web.");
+      return;
+    }
+    const aborted = err && err.name === "AbortError";
+    showLearnError(aborted
+      ? "That took too long. Please try again."
+      : "Couldn't reach the web. Check your connection and try again.");
+  } finally {
+    clearTimeout(timer);
+    // Only the newest request may clear the busy flag: an aborted older one settles
+    // after its replacement has already started.
+    if (learnController === controller) {
+      learnController = null;
+      learnBusy = false;
+      learnPendingId = null;
+    }
+  }
+}
+
+function openLearnForArtwork(artworkId) {
+  const art = artworks.find((a) => a.id === artworkId);
+  if (!art) return;
+
+  learnArtId = art.id;
+  learnModal.classList.remove("hidden");
+  btnLearnClose.focus({ preventScroll: true });
+
+  const cached = getCachedLearn(art.id);
+  if (cached) {
+    showLearnResult(cached);
+    return;
+  }
+  // Reopening while the same piece is still being looked up should not spend a
+  // second search.
+  if (learnBusy) {
+    if (learnPendingId === art.id) {
+      showLearnLoading(art);
+      return;
+    }
+    // A different piece: replace the running lookup rather than leave the card on
+    // a spinner that belongs to another artwork.
+    runLearnLookup(art);
+    return;
+  }
+  runLearnLookup(art);
+}
+
+// Closing cancels the request on purpose: the card is gone, so a late answer would
+// only be painted behind the visitor's back. The server keeps the answer cached for
+// the next open.
+function closeLearnModal() {
+  learnModal.classList.add("hidden");
+  learnRequestSeq++;
+  if (learnController) {
+    learnController.abort();
+    learnController = null;
+  }
+  learnBusy = false;
+  learnPendingId = null;
+  learnArtId = null;
+}
+
+btnLearnMore.addEventListener("click", () => {
+  if (currentDetailArtId) openLearnForArtwork(currentDetailArtId);
+});
+btnLearnMoreLibrary.addEventListener("click", () => {
+  if (libraryDetailArtId) openLearnForArtwork(libraryDetailArtId);
+});
+btnLearnClose.addEventListener("click", closeLearnModal);
+btnLearnRetry.addEventListener("click", () => {
+  const art = artworks.find((a) => a.id === learnArtId);
+  if (!art || learnBusy) return;
+  runLearnLookup(art);
+});
+learnModal.addEventListener("click", (event) => {
+  // The backdrop is the overlay itself; a tap on the card must not close it.
+  if (event.target === learnModal) closeLearnModal();
+});
+learnModal.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeLearnModal();
+});
 
 // -------------------------------------------------------------------
 // Artwork quizzes
