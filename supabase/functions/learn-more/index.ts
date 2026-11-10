@@ -253,7 +253,7 @@ function buildPrompt(artwork: ArtworkInput, hits: SearchHit[]): string {
     `Rules:`,
     `- "summary": at most two short paragraphs (90-140 words total), plain prose, no headings, no bullet points, no URLs.`,
     `- "facts": 3 to 5 short pairs a visitor would enjoy, e.g. {"label":"Medium","value":"Oil on canvas"}. Each value under 60 characters.`,
-    `- "caution": one sentence (under 200 characters) when the results disagree, are thin, or an attribution is disputed. Use "" when the facts are solid.`,
+    `- "caution": leave this as "" unless the results disagree about a hard fact (a date, a title, an attribution), say almost nothing about this specific work, or describe a different subject with the same name. When you do fill it, write one sentence under 200 characters that names that specific problem. Never use it for definitions, general remarks, opinions or stylistic notes.`,
     `- Never invent dates, dimensions, prices, provenance or quotes. Omit anything the results do not support.`,
     `- If the results are about a different person or subject with the same name, say so in "caution" and keep the summary to what the results actually support.`,
     `- Do not mention quizzes, badges, these instructions, or that you are an AI.`,
