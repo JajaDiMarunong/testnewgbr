@@ -33,6 +33,35 @@ curl "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/gemini-loo
   -d '{\"artwork\":{\"name\":\"Puente de Malabon (Malabon Bridge)\"}}'
 ```
 
+## Troubleshooting
+
+**`503 {"error":"The web search is busy right now..."}`** — that is this function's
+wrapper around Google's `429`. The reason shows up in the function logs as
+`[gemini-lookup] Attempt failed: <model> 429 ...`. At the first deploy the cause was
+the project's **free-tier quota being exhausted**, not a code fault:
+
+```
+gemini-flash-latest | 429 | You exceeded your current quota, please check your plan and billing details.
+gemini-3.8-flash    | 429 | (same)
+gemini-3.5-flash    | 429 | (same)
+```
+
+Free-tier limits are counted per project per day, so a day of testing can use them
+up. Either wait for the daily reset, or enable billing on the Google Cloud project
+and keep the budget/quota cap described in *Protecting the key* step 3. Usage:
+<https://aistudio.google.com/docs/rate-limits> and the Cloud console's
+*Generative Language API* quota page.
+
+**`404 models/gemini-2.5-flash is no longer available to new users`** — Google
+retires models for new API keys. The chain now runs `gemini-flash-latest` →
+`gemini-3.8-flash` → `gemini-3.5-flash`; override the first one with
+`npx supabase secrets set GEMINI_MODEL=gemini-3.8-flash` if a retired model is ever
+pinned again.
+
+Real museum traffic is far lighter than testing: each device hits the function at
+most once per artwork per week (the app caches answers) and the function keeps its
+own 12-hour per-artwork cache.
+
 ## Protecting the key
 
 1. **Keep it server-side.** Only `npx supabase secrets set` (or the dashboard's

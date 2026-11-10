@@ -21,7 +21,10 @@ const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models
 // Tried in order when the preferred model is retired, overloaded, or not enabled
 // for this key. "flash-latest" follows Google's current fast model, the rest are
 // named models that have been stable in this project's catalogue.
-const MODEL_FALLBACKS = ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-2.5-flash"];
+// `gemini-2.5-flash` is deliberately absent: Google answers 404 "no longer
+// available to new users" for this project's key, so it only added a wasted round
+// trip. If a different key still needs it, pin it with GEMINI_MODEL or edit here.
+const MODEL_FALLBACKS = ["gemini-3.8-flash", "gemini-3.5-flash"];
 
 const ENABLED = (Deno.env.get("GEMINI_LOOKUP_ENABLED") || "true").toLowerCase() !== "false";
 
