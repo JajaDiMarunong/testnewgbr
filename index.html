@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=37" />
+<link rel="stylesheet" href="style.css?v=38" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -147,6 +147,14 @@
         <p class="eyebrow" id="detail-eyebrow">Unlocked Artwork</p>
         <h2 id="detail-title">—</h2>
         <p id="detail-text" class="detail-text">—</p>
+        <button id="btn-learn-more" class="btn-learn" type="button" aria-haspopup="dialog">
+          <span class="btn-learn-spark" aria-hidden="true">✦</span>
+          <span class="btn-learn-text">
+            <strong>Learn More</strong>
+            <small>AI notes with web sources</small>
+          </span>
+          <span class="btn-learn-arrow" aria-hidden="true">→</span>
+        </button>
         <p id="quiz-detail-meta" class="quiz-detail-meta hidden">—</p>
         <button id="btn-take-quiz" class="btn-primary hidden">Take the Quiz</button>
         <p id="quiz-done-note" class="quiz-done-note hidden">✓ Quiz completed</p>
@@ -470,6 +478,31 @@
     </div>
   </div>
 
+  <div id="learn-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="learn-title">
+    <div class="modal-card learn-card">
+      <div class="learn-head">
+        <div class="learn-head-text">
+          <p class="modal-eyebrow">Learn More</p>
+          <h2 id="learn-title">—</h2>
+          <p id="learn-subtitle" class="learn-subtitle">—</p>
+        </div>
+        <button id="btn-learn-close" class="btn-icon learn-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div id="learn-status" class="learn-status" role="status" aria-live="polite">
+        <div class="learn-spinner" aria-hidden="true"></div>
+        <span id="learn-status-text">Searching the web…</span>
+      </div>
+
+      <div id="learn-content" class="learn-scroll hidden"></div>
+
+      <div class="learn-actions">
+        <button id="btn-learn-refresh" class="btn-secondary hidden" type="button">Search Again</button>
+        <button id="btn-learn-dismiss" class="btn-primary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="unlock-confetti" class="unlock-confetti" aria-hidden="true"></div>
 
   <div id="badge-toast" class="badge-toast hidden">
@@ -509,6 +542,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=47" defer></script>
+  <script src="app.js?v=48" defer></script>
 </body>
 </html>
