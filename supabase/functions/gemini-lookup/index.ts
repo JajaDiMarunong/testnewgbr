@@ -423,6 +423,7 @@ export default {
     const models = [GEMINI_MODEL, ...MODEL_FALLBACKS.filter((model) => model !== GEMINI_MODEL)];
     let lastMessage = "no attempt";
     let busyRetryAfter = 0;
+    let quotaExhausted = false;
 
     for (const model of models) {
       for (const thinkingOff of [true, false]) {
@@ -454,6 +455,12 @@ export default {
         // so a 429 moves on instead of ending the request.
         if (result.status === 429) {
           busyRetryAfter = result.retryAfter || 30;
+          // "You exceeded your current quota" is the project's own allowance
+          // running out (typically the free tier's daily cap), which no amount
+          // of waiting seconds will fix. Say so instead of blaming the network.
+          if (/exceeded your current quota|resource_exhausted/i.test(String(result.message))) {
+            quotaExhausted = true;
+          }
           break;
         }
         if (!result.nextModel) {
@@ -465,6 +472,14 @@ export default {
 
     if (busyRetryAfter) {
       console.warn("[gemini-lookup] Every model was rate limited.");
+      if (quotaExhausted) {
+        return errorResponse(
+          req,
+          "Learn More is paused while the museum's search quota resets. Please ask museum staff.",
+          503,
+          900,
+        );
+      }
       return errorResponse(req, "The web search is busy right now. Please try again in a moment.", 503, busyRetryAfter);
     }
     console.error("[gemini-lookup] Every model failed:", lastMessage);

@@ -1835,7 +1835,14 @@ function describeLearnError(error, aborted) {
     if (secs >= 120) return `The web search needs a break. Please try again in ${formatLearnWait(secs)}.`;
     return "The web search needs a short breather. Please try again in a few minutes.";
   }
-  if (status === 503) return "Learn More isn't available right now. Please try again later, or ask museum staff.";
+  if (status === 503) {
+    // The function knows why it stopped (busy web search, switched off, not
+    // configured) and its sentence is more useful than a flat "unavailable".
+    // Anything that looks like a bare transport failure stays generic.
+    const serverMessage = error && typeof error.message === "string" ? error.message.trim() : "";
+    if (serverMessage && !/^Search failed \(\d+\)\.?$/.test(serverMessage)) return serverMessage;
+    return "Learn More isn't available right now. Please try again later, or ask museum staff.";
+  }
   if (status >= 500) return "The web search didn't answer just now. Please try again.";
   if (navigator.onLine === false) {
     return "You look offline. Connect to the internet to search for more about this artwork.";
